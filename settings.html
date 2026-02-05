@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxture - Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0a0a0a',
+                            card: '#1a1a1a',
+                            border: '#27272a'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0a0a0a;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+
+        /* Collapse animation */
+        .collapse-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .collapse-content.expanded {
+            max-height: 2000px;
+        }
+
+        /* Pulse animation for live indicator */
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse-dot {
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        /* Code block styling */
+        .code-block {
+            background: #0d0d0d;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .code-block pre {
+            padding: 16px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .code-block .comment {
+            color: #6b7280;
+        }
+        .code-block .keyword {
+            color: #c084fc;
+        }
+        .code-block .string {
+            color: #4ade80;
+        }
+        .code-block .function {
+            color: #60a5fa;
+        }
+        .code-block .variable {
+            color: #f472b6;
+        }
+
+        /* Range slider styling */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: #27272a;
+            border-radius: 3px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #2563eb;
+        }
+
+        /* Checkbox styling */
+        .custom-checkbox {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #3f3f46;
+            border-radius: 4px;
+            background: transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .custom-checkbox:checked {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+        }
+
+        /* Radio button styling */
+        .custom-radio {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #3f3f46;
+            border-radius: 50%;
+            background: transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .custom-radio:checked {
+            border-color: #3b82f6;
+            background: radial-gradient(circle, #3b82f6 40%, transparent 40%);
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #1a1a1a;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-dark-bg text-gray-200 min-h-screen">
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span id="toast-message" class="text-sm text-gray-300">Copied to clipboard</span>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <nav class="fixed top-0 left-0 right-0 h-14 bg-dark-card border-b border-zinc-800 z-50 flex items-center justify-between px-6">
+        <div class="flex items-center gap-8">
+            <!-- Logo -->
+            <a href="dashboard.html" class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                    </svg>
+                </div>
+                <span class="text-xl font-bold text-white">Voxture</span>
+            </a>
+
+            <!-- Connected Bot Indicator -->
+            <div class="flex items-center gap-2 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800">
+                <div class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></div>
+                <span class="text-sm text-gray-400">Voice Bot:</span>
+                <span class="text-sm font-medium text-white">ConstructBot v2</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <button class="text-gray-400 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                </svg>
+            </button>
+            <button class="flex items-center gap-2 bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/20">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <span class="text-sm font-medium">Settings</span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="flex pt-14">
+        <!-- Left Sidebar -->
+        <aside class="fixed left-0 top-14 bottom-0 w-56 bg-dark-card border-r border-zinc-800 p-4">
+            <nav class="space-y-1">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-800/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                    </svg>
+                    <span>Home</span>
+                </a>
+                <a href="test-runs.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-800/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                    </svg>
+                    <span>Test Runs</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-800/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <span>Analytics</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-800/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                    </svg>
+                    <span>Dataset</span>
+                </a>
+                <a href="settings.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span class="font-medium">Settings</span>
+                </a>
+            </nav>
+
+            <!-- Upgrade CTA -->
+            <div class="absolute bottom-4 left-4 right-4">
+                <div class="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-4">
+                    <p class="text-sm font-medium text-white mb-1">Need more tests?</p>
+                    <p class="text-xs text-gray-400 mb-3">Upgrade for unlimited test runs</p>
+                    <button class="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors">
+                        Upgrade Plan
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="ml-56 flex-1 p-6 min-h-screen max-w-5xl">
+            <!-- Page Header -->
+            <div class="mb-8">
+                <h1 class="text-2xl font-bold text-white mb-2">Settings</h1>
+                <p class="text-gray-400">Manage your API integration, connected bots, and account preferences</p>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- SECTION 1: API INTEGRATION -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <section class="mb-8">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-white">API Integration</h2>
+                        <p class="text-sm text-gray-400">Connect your voice bot in 5 minutes</p>
+                    </div>
+                </div>
+
+                <!-- Panel 1.1: Your API Key -->
+                <div class="bg-dark-card border border-zinc-800 rounded-xl p-6 mb-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-medium text-white">Your API Key</h3>
+                        <span class="text-xs px-2 py-1 bg-green-500/10 text-green-400 rounded-full flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                            Active
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-2 mb-4">
+                        <div class="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 font-mono text-sm">
+                            <span id="api-key-display" class="text-gray-400">vx_live_••••••••••••••••••••••••••••3q1r5s6t</span>
+                            <span id="api-key-full" class="text-gray-300 hidden">vx_live_4k7d9m2n8p3q1r5s6t8w0x2y4z6a8b0c3q1r5s6t</span>
+                        </div>
+                        <button onclick="copyApiKey()" class="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-gray-300 transition-colors flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                            Copy
+                        </button>
+                        <button onclick="toggleApiKey()" id="reveal-btn" class="px-4 py-3 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-gray-300 transition-colors flex items-center gap-2">
+                            <svg id="eye-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            <span id="reveal-text">Reveal</span>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-4 mb-4 text-sm">
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500">Created:</span>
+                            <span class="text-gray-300">Jan 15, 2026</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500">Last used:</span>
+                            <span class="text-gray-300">2 hours ago</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-500">Requests this month:</span>
+                            <span class="text-gray-300 mono">2,847 / 10,000</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button class="px-4 py-2 text-sm text-red-400 hover:text-red-300 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors">
+                            Regenerate Key
+                        </button>
+                        <button class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors">
+                            View Usage Logs
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel 1.2: Quick Start Guide -->
+                <div class="bg-dark-card border border-zinc-800 rounded-xl overflow-hidden mb-4">
+                    <button onclick="toggleCollapse('quickstart')" class="w-full flex items-center justify-between p-6 hover:bg-zinc-800/30 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center">
+                                <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                            </div>
+                            <div class="text-left">
+                                <h3 class="font-medium text-white">Quick Start Guide</h3>
+                                <p class="text-sm text-gray-400">Get up and running in 4 steps</p>
+                            </div>
+                        </div>
+                        <svg id="quickstart-icon" class="w-5 h-5 text-gray-500 transform rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <div id="quickstart-content" class="collapse-content expanded">
+                        <div class="px-6 pb-6 border-t border-zinc-800 pt-4 space-y-6">
+                            <!-- Step 1 -->
+                            <div>
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">1</span>
+                                    <span class="text-sm font-medium text-white">Install the SDK</span>
+                                </div>
+                                <div class="code-block relative">
+                                    <button onclick="copyCode('step1')" class="absolute top-3 right-3 px-2 py-1 text-xs text-gray-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors">
+                                        Copy
+                                    </button>
+                                    <pre id="step1" class="mono text-gray-300"><span class="comment"># Python</span>
+pip install voxture
+
+<span class="comment"># Node.js</span>
+npm install @voxture/sdk</pre>
+                                </div>
+                            </div>
+
+                            <!-- Step 2 -->
+                            <div>
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">2</span>
+                                    <span class="text-sm font-medium text-white">Initialize with your API key</span>
+                                </div>
+                                <div class="code-block relative">
+                                    <button onclick="copyCode('step2')" class="absolute top-3 right-3 px-2 py-1 text-xs text-gray-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors">
+                                        Copy
+                                    </button>
+                                    <pre id="step2" class="mono text-gray-300"><span class="comment"># Python</span>
+<span class="keyword">from</span> voxture <span class="keyword">import</span> Voxture
+
+client = Voxture(api_key=<span class="string">"vx_live_4k7d9m2n8p3q..."</span>)
+
+<span class="comment">// Node.js</span>
+<span class="keyword">const</span> { Voxture } = <span class="function">require</span>(<span class="string">'@voxture/sdk'</span>);
+
+<span class="keyword">const</span> client = <span class="keyword">new</span> <span class="function">Voxture</span>({
+    apiKey: <span class="string">'vx_live_4k7d9m2n8p3q...'</span>
+});</pre>
+                                </div>
+                            </div>
+
+                            <!-- Step 3 -->
+                            <div>
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">3</span>
+                                    <span class="text-sm font-medium text-white">Connect your voice bot</span>
+                                </div>
+                                <div class="code-block relative">
+                                    <button onclick="copyCode('step3')" class="absolute top-3 right-3 px-2 py-1 text-xs text-gray-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors">
+                                        Copy
+                                    </button>
+                                    <pre id="step3" class="mono text-gray-300"><span class="comment"># Python</span>
+bot = client.bots.<span class="function">connect</span>(
+    name=<span class="string">"ConstructBot v2"</span>,
+    endpoint=<span class="string">"https://your-bot.com/api/voice"</span>,
+    auth_token=<span class="string">"your-bot-token"</span>
+)
+
+<span class="comment">// Node.js</span>
+<span class="keyword">const</span> bot = <span class="keyword">await</span> client.bots.<span class="function">connect</span>({
+    name: <span class="string">'ConstructBot v2'</span>,
+    endpoint: <span class="string">'https://your-bot.com/api/voice'</span>,
+    authToken: <span class="string">'your-bot-token'</span>
+});</pre>
+                                </div>
+                            </div>
+
+                            <!-- Step 4 -->
+                            <div>
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">4</span>
+                                    <span class="text-sm font-medium text-white">Run your first test</span>
+                                </div>
+                                <div class="code-block relative">
+                                    <button onclick="copyCode('step4')" class="absolute top-3 right-3 px-2 py-1 text-xs text-gray-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded transition-colors">
+                                        Copy
+                                    </button>
+                                    <pre id="step4" class="mono text-gray-300"><span class="comment"># Python</span>
+test = client.tests.<span class="function">run</span>(
+    bot_id=bot.id,
+    use_case=<span class="string">"construction"</span>,
+    scenarios=<span class="variable">1000</span>
+)
+
+<span class="function">print</span>(<span class="string">f"Pass rate: </span>{test.pass_rate}<span class="string">%"</span>)
+<span class="function">print</span>(<span class="string">f"Critical failures: </span>{test.critical_count}<span class="string">"</span>)
+
+<span class="comment">// Node.js</span>
+<span class="keyword">const</span> test = <span class="keyword">await</span> client.tests.<span class="function">run</span>({
+    botId: bot.id,
+    useCase: <span class="string">'construction'</span>,
+    scenarios: <span class="variable">1000</span>
+});
+
+console.<span class="function">log</span>(<span class="string">`Pass rate: </span>${test.passRate}<span class="string">%`</span>);
+console.<span class="function">log</span>(<span class="string">`Critical failures: </span>${test.criticalCount}<span class="string">`</span>);</pre>
+                                </div>
+                            </div>
+
+                            <a href="#" class="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm transition-colors">
+                                View Full Documentation
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel 1.3: Webhook Configuration -->
+                <div class="bg-dark-card border border-zinc-800 rounded-xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-8 h-8 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="font-medium text-white">Webhooks</h3>
+                            <p class="text-sm text-gray-400">Get notified when production failures occur</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Webhook URL</label>
+                            <input type="url" placeholder="https://your-server.com/webhooks/voxture" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-3">Events to notify</label>
+                            <div class="space-y-3">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="custom-checkbox" checked>
+                                    <span class="text-sm text-gray-300">Test run completed</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="custom-checkbox" checked>
+                                    <span class="text-sm text-gray-300">Critical failure detected</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="custom-checkbox">
+                                    <span class="text-sm text-gray-300">Daily summary report</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" class="custom-checkbox">
+                                    <span class="text-sm text-gray-300">Dataset growth milestones</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors">
+                            Save Webhook Settings
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- SECTION 2: CONNECTED BOTS -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <section class="mb-8">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-semibold text-white">Connected Voice Bots</h2>
+                </div>
+
+                <div class="bg-dark-card border border-zinc-800 rounded-xl overflow-hidden">
+                    <!-- Bot 1: Active -->
+                    <div class="p-5 border-b border-zinc-800">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="font-medium text-white">ConstructBot v2</h4>
+                                    <p class="text-sm text-gray-500 mono">bot_7k3m9n2p4q8r1s5t</p>
+                                </div>
+                            </div>
+                            <span class="px-2.5 py-1 text-xs font-medium bg-green-500/10 text-green-400 rounded-full flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 bg-green-500 rounded-full pulse-dot"></span>
+                                Active
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-4 text-sm mb-4">
+                            <div>
+                                <p class="text-gray-500">Endpoint</p>
+                                <p class="text-gray-300 truncate mono text-xs">https://api.buildtech.com/voice</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500">Connected</p>
+                                <p class="text-gray-300">Jan 15, 2026</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500">Tests run</p>
+                                <p class="text-gray-300 mono">47</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500">Last test</p>
+                                <p class="text-gray-300">2 hours ago</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button class="px-3 py-1.5 text-xs text-gray-400 hover:text-white border border-zinc-700 rounded hover:bg-zinc-800 transition-colors">
+                                Edit Configuration
+                            </button>
+                            <button class="px-3 py-1.5 text-xs text-gray-400 hover:text-white border border-zinc-700 rounded hover:bg-zinc-800 transition-colors">
+                                View Logs
+                            </button>
+                            <button class="px-3 py-1.5 text-xs text-red-400 hover:text-red-300 border border-red-500/30 rounded hover:bg-red-500/10 transition-colors">
+                                Disconnect
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Bot 2: Disconnected -->
+                    <div class="p-5 opacity-60">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h4 class="font-medium text-gray-400">ConstructBot v1 (Legacy)</h4>
+                                    <p class="text-sm text-gray-600 mono">bot_3f5g7h9j1k2l4m6n</p>
+                                </div>
+                            </div>
+                            <span class="px-2.5 py-1 text-xs font-medium bg-zinc-800 text-gray-500 rounded-full">
+                                Disconnected
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button class="px-3 py-1.5 text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 rounded hover:bg-blue-500/10 transition-colors">
+                                Reconnect
+                            </button>
+                            <button class="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-400 border border-zinc-700 rounded hover:bg-zinc-800 transition-colors">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="mt-4 w-full py-3 border border-dashed border-zinc-700 rounded-xl text-gray-400 hover:text-white hover:border-zinc-600 transition-colors flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    Connect New Bot
+                </button>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- SECTION 3: TEST CONFIGURATION -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <section class="mb-8">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-amber-500/10 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-semibold text-white">Default Test Settings</h2>
+                </div>
+
+                <div class="bg-dark-card border border-zinc-800 rounded-xl p-6">
+                    <div class="grid grid-cols-2 gap-6">
+                        <!-- Use Case -->
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Use Case</label>
+                            <div class="relative">
+                                <select class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-gray-300 appearance-none focus:outline-none focus:border-blue-500 transition-colors cursor-pointer">
+                                    <option>Construction</option>
+                                    <option>Manufacturing</option>
+                                    <option>Warehouse</option>
+                                    <option>Healthcare</option>
+                                    <option>Retail</option>
+                                    <option>Call Center</option>
+                                </select>
+                                <svg class="w-4 h-4 text-gray-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- Default Scenarios -->
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Default Scenarios per Test</label>
+                            <div class="flex items-center gap-4">
+                                <input type="range" min="100" max="2000" value="1000" id="scenario-slider" oninput="updateScenarioValue(this.value)" class="flex-1">
+                                <span id="scenario-value" class="mono text-white bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-700 min-w-[80px] text-center text-sm">1000</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Range: 100 - 2,000 scenarios</p>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-zinc-800 mt-6 pt-6">
+                        <div class="grid grid-cols-2 gap-6">
+                            <!-- Test Data Composition -->
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-3">Test Data Composition</label>
+                                <div class="space-y-3">
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="radio" name="composition" class="custom-radio" checked>
+                                        <div>
+                                            <span class="text-sm text-gray-300">80% Real / 20% Synthetic</span>
+                                            <span class="text-xs text-blue-400 ml-2">(Recommended)</span>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="radio" name="composition" class="custom-radio">
+                                        <span class="text-sm text-gray-300">50% Real / 50% Synthetic</span>
+                                    </label>
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="radio" name="composition" class="custom-radio">
+                                        <span class="text-sm text-gray-300">20% Real / 80% Synthetic</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Failure Threshold -->
+                            <div>
+                                <label class="block text-sm text-gray-400 mb-3">Report Failure Severity</label>
+                                <div class="space-y-3">
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="radio" name="severity" class="custom-radio" checked>
+                                        <div>
+                                            <span class="text-sm text-gray-300">Critical + Moderate</span>
+                                            <span class="text-xs text-blue-400 ml-2">(Recommended)</span>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="radio" name="severity" class="custom-radio">
+                                        <span class="text-sm text-gray-300">Critical only</span>
+                                    </label>
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input type="radio" name="severity" class="custom-radio">
+                                        <span class="text-sm text-gray-300">All severities</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors">
+                            Save Test Configuration
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- SECTION 4: ACCOUNT & BILLING -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <section class="mb-8">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-semibold text-white">Account Settings</h2>
+                </div>
+
+                <!-- Organization & Plan -->
+                <div class="bg-dark-card border border-zinc-800 rounded-xl p-6 mb-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="font-medium text-white mb-1">BuildTech Solutions</h3>
+                            <p class="text-sm text-gray-500">Organization ID: org_8k2m4n6p9q1r3s5t</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="px-2.5 py-1 text-xs font-medium bg-purple-500/10 text-purple-400 rounded-full">Professional</span>
+                                <span class="text-white font-semibold">$299/mo</span>
+                            </div>
+                            <p class="text-sm text-gray-500">Next billing: Feb 15, 2026</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-zinc-900/50 rounded-lg p-4 mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm text-gray-400">Monthly test quota</span>
+                            <span class="text-sm text-gray-300 mono">2,847 / 10,000</span>
+                        </div>
+                        <div class="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                            <div class="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" style="width: 28.47%"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">Resets in 11 days</p>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button class="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white text-sm font-medium rounded-lg transition-colors">
+                            Upgrade Plan
+                        </button>
+                        <button class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors">
+                            View Billing History
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Team Members -->
+                <div class="bg-dark-card border border-zinc-800 rounded-xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-medium text-white">Team Members</h3>
+                        <span class="text-sm text-gray-500">3 / 5 seats</span>
+                    </div>
+
+                    <div class="space-y-3 mb-4">
+                        <!-- Member 1 -->
+                        <div class="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                                    A
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-white">Aayush</p>
+                                    <p class="text-xs text-gray-500">aayush@buildtech.com</p>
+                                </div>
+                            </div>
+                            <span class="px-2 py-1 text-xs bg-amber-500/10 text-amber-400 rounded">Owner</span>
+                        </div>
+
+                        <!-- Member 2 -->
+                        <div class="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 bg-gradient-to-br from-green-500 to-teal-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                                    S
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-white">Sarah Chen</p>
+                                    <p class="text-xs text-gray-500">sarah@buildtech.com</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 rounded">Admin</span>
+                                <button class="p-1 text-gray-500 hover:text-gray-300 transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Member 3 -->
+                        <div class="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                                    M
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-white">Mike Rodriguez</p>
+                                    <p class="text-xs text-gray-500">mike@buildtech.com</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-1 text-xs bg-zinc-700 text-gray-400 rounded">Member</span>
+                                <button class="p-1 text-gray-500 hover:text-gray-300 transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="w-full py-2.5 border border-dashed border-zinc-700 rounded-lg text-gray-400 hover:text-white hover:border-zinc-600 transition-colors flex items-center justify-center gap-2 text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Invite Team Member
+                    </button>
+                </div>
+            </section>
+
+            <!-- Danger Zone -->
+            <section class="mb-8">
+                <div class="bg-dark-card border border-red-500/20 rounded-xl p-6">
+                    <h3 class="font-medium text-red-400 mb-4">Danger Zone</h3>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-300 mb-1">Delete Organization</p>
+                            <p class="text-xs text-gray-500">Permanently delete your organization and all associated data</p>
+                        </div>
+                        <button class="px-4 py-2 text-sm text-red-400 hover:text-red-300 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors">
+                            Delete Organization
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // API Key visibility toggle
+        let apiKeyVisible = false;
+        function toggleApiKey() {
+            apiKeyVisible = !apiKeyVisible;
+            const display = document.getElementById('api-key-display');
+            const full = document.getElementById('api-key-full');
+            const revealText = document.getElementById('reveal-text');
+
+            if (apiKeyVisible) {
+                display.classList.add('hidden');
+                full.classList.remove('hidden');
+                revealText.textContent = 'Hide';
+            } else {
+                display.classList.remove('hidden');
+                full.classList.add('hidden');
+                revealText.textContent = 'Reveal';
+            }
+        }
+
+        // Copy API Key
+        function copyApiKey() {
+            const apiKey = 'vx_live_4k7d9m2n8p3q1r5s6t8w0x2y4z6a8b0c3q1r5s6t';
+            navigator.clipboard.writeText(apiKey).then(() => {
+                showToast('API key copied to clipboard');
+            });
+        }
+
+        // Copy code blocks
+        function copyCode(elementId) {
+            const code = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                showToast('Code copied to clipboard');
+            });
+        }
+
+        // Toast notification
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            toastMessage.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        // Toggle collapse/expand
+        function toggleCollapse(id) {
+            const content = document.getElementById(`${id}-content`);
+            const icon = document.getElementById(`${id}-icon`);
+
+            content.classList.toggle('expanded');
+            icon.classList.toggle('rotate-180');
+        }
+
+        // Update scenario slider value
+        function updateScenarioValue(value) {
+            document.getElementById('scenario-value').textContent = value;
+        }
+    </script>
+</body>
+</html>

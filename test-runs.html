@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voxture - Test Runs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0a0a0a',
+                            card: '#1a1a1a',
+                            border: '#27272a'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0a0a0a;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+
+        /* Pulse animation for live indicator */
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse-dot {
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        /* Expandable row animation */
+        .expand-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+            opacity: 0;
+        }
+        .expand-content.expanded {
+            max-height: 800px;
+            opacity: 1;
+        }
+
+        /* Table row hover */
+        .table-row:hover {
+            background-color: rgba(39, 39, 42, 0.5);
+        }
+
+        /* Progress bar animation */
+        @keyframes progress-fill {
+            from { width: 0; }
+        }
+        .progress-animated {
+            animation: progress-fill 0.8s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-dark-bg text-gray-200 min-h-screen">
+    <!-- Top Navigation Bar -->
+    <nav class="fixed top-0 left-0 right-0 h-14 bg-dark-card border-b border-zinc-800 z-50 flex items-center justify-between px-6">
+        <div class="flex items-center gap-8">
+            <!-- Logo -->
+            <a href="dashboard.html" class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                    </svg>
+                </div>
+                <span class="text-xl font-bold text-white">Voxture</span>
+            </a>
+
+            <!-- Connected Bot Indicator -->
+            <div class="flex items-center gap-2 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800">
+                <div class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></div>
+                <span class="text-sm text-gray-400">Voice Bot:</span>
+                <span class="text-sm font-medium text-white">ConstructBot v2</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <button class="text-gray-400 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                </svg>
+            </button>
+            <a href="settings.html" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <span class="text-sm">Settings</span>
+            </a>
+        </div>
+    </nav>
+
+    <div class="flex pt-14">
+        <!-- Left Sidebar -->
+        <aside class="fixed left-0 top-14 bottom-0 w-56 bg-dark-card border-r border-zinc-800 p-4">
+            <nav class="space-y-1">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-800/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                    </svg>
+                    <span>Home</span>
+                </a>
+                <a href="test-runs.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                    </svg>
+                    <span class="font-medium">Test Runs</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-800/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <span>Analytics</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-800/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                    </svg>
+                    <span>Dataset</span>
+                </a>
+                <a href="settings.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-800/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <!-- Upgrade CTA -->
+            <div class="absolute bottom-4 left-4 right-4">
+                <div class="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-4">
+                    <p class="text-sm font-medium text-white mb-1">Need more tests?</p>
+                    <p class="text-xs text-gray-400 mb-3">Upgrade for unlimited test runs</p>
+                    <button class="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors">
+                        Upgrade Plan
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="ml-56 mr-72 flex-1 p-6 min-h-screen">
+            <!-- Page Header -->
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-white mb-1">Test Runs</h1>
+                    <p class="text-gray-400">Track all test runs across your voice bots</p>
+                </div>
+                <button class="px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Run New Test
+                </button>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-dark-card border border-zinc-800 rounded-xl p-4 mb-6">
+                <div class="flex items-center gap-4">
+                    <div class="flex-1">
+                        <div class="relative">
+                            <svg class="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            <input type="text" placeholder="Search by run #, bot name, or use case..." class="w-full bg-zinc-900 border border-zinc-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-gray-300 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors">
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <select class="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-gray-300 appearance-none pr-10 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer">
+                            <option>All Bots</option>
+                            <option>ConstructBot v2</option>
+                            <option>ConstructBot v1</option>
+                        </select>
+                        <svg class="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </div>
+                    <div class="relative">
+                        <select class="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-gray-300 appearance-none pr-10 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer">
+                            <option>All Use Cases</option>
+                            <option>Construction</option>
+                            <option>Manufacturing</option>
+                            <option>Warehouse</option>
+                        </select>
+                        <svg class="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </div>
+                    <div class="relative">
+                        <select class="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-gray-300 appearance-none pr-10 focus:outline-none focus:border-blue-500 transition-colors cursor-pointer">
+                            <option>Last 7 days</option>
+                            <option>Last 30 days</option>
+                            <option>Last 90 days</option>
+                            <option>All time</option>
+                        </select>
+                        <svg class="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Runs Table -->
+            <div class="bg-dark-card border border-zinc-800 rounded-xl overflow-hidden">
+                <!-- Table Header -->
+                <div class="grid grid-cols-12 gap-4 px-5 py-3 bg-zinc-900/50 border-b border-zinc-800 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <div class="col-span-1">Run #</div>
+                    <div class="col-span-2">Bot</div>
+                    <div class="col-span-2">Use Case</div>
+                    <div class="col-span-2">Pass Rate</div>
+                    <div class="col-span-2">Critical</div>
+                    <div class="col-span-2">Date/Time</div>
+                    <div class="col-span-1">Status</div>
+                </div>
+
+                <!-- Test Run Rows -->
+                <div id="test-runs-container">
+                    <!-- Run #47 -->
+                    <div class="border-b border-zinc-800">
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-47')">
+                            <div class="col-span-1 mono text-white font-medium">#47</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 rounded">Construction</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-amber-400 font-medium">82.3%</span>
+                                    <span class="text-xs text-gray-500">(823/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-red-400 font-medium">7 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Feb 4, 2:34 PM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-47-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <!-- Expanded Content -->
+                        <div id="run-47-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h3 class="text-lg font-semibold text-white">Test Run #47 - Construction Use Case</h3>
+                                            <p class="text-sm text-gray-400">Duration: 4m 32s • Completed: Feb 4, 2026 2:34 PM</p>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2 py-1 text-xs bg-amber-500/10 text-amber-400 rounded flex items-center gap-1">
+                                                <span>↗</span> +0.3% vs previous
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Performance Breakdown -->
+                                    <div class="grid grid-cols-2 gap-4 mb-6">
+                                        <div class="bg-zinc-900/50 rounded-lg p-4">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-sm text-gray-400">Real-world samples</span>
+                                                <span class="mono text-white font-medium">164/200 <span class="text-gray-500 text-xs">(82.0%)</span></span>
+                                            </div>
+                                            <div class="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                                                <div class="h-full bg-blue-500 rounded-full progress-animated" style="width: 82%"></div>
+                                            </div>
+                                        </div>
+                                        <div class="bg-zinc-900/50 rounded-lg p-4">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-sm text-gray-400">Synthetic variations</span>
+                                                <span class="mono text-white font-medium">659/800 <span class="text-gray-500 text-xs">(82.4%)</span></span>
+                                            </div>
+                                            <div class="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                                                <div class="h-full bg-purple-500 rounded-full progress-animated" style="width: 82.4%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Failure Breakdown -->
+                                    <div class="mb-6">
+                                        <h4 class="text-sm font-medium text-gray-300 mb-3">Failure Breakdown by Category</h4>
+                                        <div class="grid grid-cols-4 gap-3">
+                                            <div class="bg-zinc-900/50 rounded-lg p-3">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <span class="text-red-500">🔴</span>
+                                                    <span class="text-xs text-gray-400">Safety-Critical</span>
+                                                </div>
+                                                <p class="mono text-white font-medium">7 <span class="text-gray-500 text-xs">(0.7%)</span></p>
+                                            </div>
+                                            <div class="bg-zinc-900/50 rounded-lg p-3">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <span class="text-amber-500">🟡</span>
+                                                    <span class="text-xs text-gray-400">Accent</span>
+                                                </div>
+                                                <p class="mono text-white font-medium">45 <span class="text-gray-500 text-xs">(4.5%)</span></p>
+                                            </div>
+                                            <div class="bg-zinc-900/50 rounded-lg p-3">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <span class="text-amber-500">🟡</span>
+                                                    <span class="text-xs text-gray-400">Noise</span>
+                                                </div>
+                                                <p class="mono text-white font-medium">72 <span class="text-gray-500 text-xs">(7.2%)</span></p>
+                                            </div>
+                                            <div class="bg-zinc-900/50 rounded-lg p-3">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <span class="text-green-500">🟢</span>
+                                                    <span class="text-xs text-gray-400">Disfluency</span>
+                                                </div>
+                                                <p class="mono text-white font-medium">22 <span class="text-gray-500 text-xs">(2.2%)</span></p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Test Suite Composition -->
+                                    <div class="grid grid-cols-2 gap-6 mb-6">
+                                        <div>
+                                            <h4 class="text-sm font-medium text-gray-300 mb-3">Test Suite Composition</h4>
+                                            <div class="space-y-2 text-sm">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-gray-400">Construction scenarios</span>
+                                                    <span class="mono text-white">700 tests <span class="text-gray-500">(70%)</span></span>
+                                                </div>
+                                                <div class="pl-4 space-y-1 text-xs text-gray-500">
+                                                    <div class="flex justify-between"><span>• Safety commands</span><span class="mono">200 tests</span></div>
+                                                    <div class="flex justify-between"><span>• Equipment operations</span><span class="mono">300 tests</span></div>
+                                                    <div class="flex justify-between"><span>• General comms</span><span class="mono">200 tests</span></div>
+                                                </div>
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-gray-400">Manufacturing scenarios</span>
+                                                    <span class="mono text-white">200 tests <span class="text-gray-500">(20%)</span></span>
+                                                </div>
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-gray-400">Warehouse scenarios</span>
+                                                    <span class="mono text-white">100 tests <span class="text-gray-500">(10%)</span></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-sm font-medium text-gray-300 mb-3">Noise Levels Tested</h4>
+                                            <div class="space-y-2 text-sm">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-gray-400">70-80dB</span>
+                                                    <span class="mono text-white">250 tests</span>
+                                                </div>
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-gray-400">80-90dB</span>
+                                                    <span class="mono text-white">400 tests</span>
+                                                </div>
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-gray-400">90-100dB</span>
+                                                    <span class="mono text-white">250 tests</span>
+                                                </div>
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-gray-400">100-105dB</span>
+                                                    <span class="mono text-white">100 tests</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div class="flex items-center gap-3 pt-4 border-t border-zinc-800">
+                                        <button class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors">
+                                            Export Report
+                                        </button>
+                                        <a href="dashboard.html" class="px-4 py-2 text-sm text-blue-400 hover:text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/10 transition-colors">
+                                            View All Failures
+                                        </a>
+                                        <button class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors">
+                                            Re-run Test
+                                        </button>
+                                        <button class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors">
+                                            Compare with Previous
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Run #46 -->
+                    <div class="border-b border-zinc-800">
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-46')">
+                            <div class="col-span-1 mono text-white font-medium">#46</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 rounded">Construction</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-amber-400 font-medium">82.0%</span>
+                                    <span class="text-xs text-gray-500">(820/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-red-400 font-medium">9 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Feb 3, 10:15 AM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-46-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="run-46-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <p class="text-gray-400 text-sm">Detailed breakdown for Run #46...</p>
+                                    <div class="flex items-center gap-3 mt-4">
+                                        <button class="px-4 py-2 text-sm text-gray-400 hover:text-white border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors">Export Report</button>
+                                        <button class="px-4 py-2 text-sm text-blue-400 hover:text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/10 transition-colors">View All Failures</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Run #45 -->
+                    <div class="border-b border-zinc-800">
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-45')">
+                            <div class="col-span-1 mono text-white font-medium">#45</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 rounded">Construction</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-red-400 font-medium">79.2%</span>
+                                    <span class="text-xs text-gray-500">(792/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-red-400 font-medium">12 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Feb 2, 4:15 PM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-45-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="run-45-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <p class="text-gray-400 text-sm">Detailed breakdown for Run #45...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Run #44 -->
+                    <div class="border-b border-zinc-800">
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-44')">
+                            <div class="col-span-1 mono text-white font-medium">#44</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 rounded">Construction</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-amber-400 font-medium">83.1%</span>
+                                    <span class="text-xs text-gray-500">(831/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-red-400 font-medium">5 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Feb 1, 9:47 AM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-44-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="run-44-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <p class="text-gray-400 text-sm">Detailed breakdown for Run #44...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Run #43 -->
+                    <div class="border-b border-zinc-800">
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-43')">
+                            <div class="col-span-1 mono text-white font-medium">#43</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-purple-500/10 text-purple-400 rounded">Manufacturing</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-green-400 font-medium">86.4%</span>
+                                    <span class="text-xs text-gray-500">(864/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-amber-400 font-medium">3 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Jan 31, 3:22 PM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-43-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="run-43-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <p class="text-gray-400 text-sm">Detailed breakdown for Run #43...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Run #42 -->
+                    <div class="border-b border-zinc-800">
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-42')">
+                            <div class="col-span-1 mono text-white font-medium">#42</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 rounded">Construction</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-amber-400 font-medium">80.5%</span>
+                                    <span class="text-xs text-gray-500">(805/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-red-400 font-medium">8 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Jan 30, 5:12 PM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-42-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="run-42-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <p class="text-gray-400 text-sm">Detailed breakdown for Run #42...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Run #41 -->
+                    <div class="border-b border-zinc-800">
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-41')">
+                            <div class="col-span-1 mono text-white font-medium">#41</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-green-500/10 text-green-400 rounded">Warehouse</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-green-400 font-medium">88.2%</span>
+                                    <span class="text-xs text-gray-500">(882/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-amber-400 font-medium">2 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Jan 29, 11:08 AM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-41-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="run-41-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <p class="text-gray-400 text-sm">Detailed breakdown for Run #41...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Run #40 -->
+                    <div class="border-b border-zinc-800">
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-40')">
+                            <div class="col-span-1 mono text-white font-medium">#40</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 rounded">Construction</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-red-400 font-medium">78.9%</span>
+                                    <span class="text-xs text-gray-500">(789/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-red-400 font-medium">11 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Jan 28, 2:45 PM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-40-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="run-40-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <p class="text-gray-400 text-sm">Detailed breakdown for Run #40...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Run #39 -->
+                    <div class="border-b border-zinc-800">
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-39')">
+                            <div class="col-span-1 mono text-white font-medium">#39</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 rounded">Construction</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-amber-400 font-medium">82.0%</span>
+                                    <span class="text-xs text-gray-500">(820/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-red-400 font-medium">6 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Jan 27, 11:15 AM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-39-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="run-39-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <p class="text-gray-400 text-sm">Detailed breakdown for Run #39...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Run #38 -->
+                    <div>
+                        <div class="table-row grid grid-cols-12 gap-4 px-5 py-4 cursor-pointer transition-colors" onclick="toggleExpand('run-38')">
+                            <div class="col-span-1 mono text-white font-medium">#38</div>
+                            <div class="col-span-2">
+                                <p class="text-white text-sm">ConstructBot v2</p>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="px-2 py-1 text-xs bg-purple-500/10 text-purple-400 rounded">Manufacturing</span>
+                            </div>
+                            <div class="col-span-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="mono text-green-400 font-medium">85.7%</span>
+                                    <span class="text-xs text-gray-500">(857/1000)</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <span class="text-amber-400 font-medium">4 failures</span>
+                            </div>
+                            <div class="col-span-2 text-sm text-gray-400">Jan 26, 4:30 PM</div>
+                            <div class="col-span-1 flex items-center justify-between">
+                                <span class="flex items-center gap-1 text-green-400 text-sm">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    Done
+                                </span>
+                                <svg id="run-38-icon" class="w-4 h-4 text-gray-500 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div id="run-38-content" class="expand-content">
+                            <div class="px-5 pb-5 bg-zinc-900/30">
+                                <div class="border border-zinc-800 rounded-lg p-5">
+                                    <p class="text-gray-400 text-sm">Detailed breakdown for Run #38...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pagination -->
+                <div class="flex items-center justify-between px-5 py-4 bg-zinc-900/30 border-t border-zinc-800">
+                    <p class="text-sm text-gray-500">Showing 10 of 47 test runs</p>
+                    <div class="flex items-center gap-2">
+                        <button class="px-3 py-1.5 text-sm text-gray-400 border border-zinc-700 rounded hover:bg-zinc-800 transition-colors disabled:opacity-50" disabled>
+                            Previous
+                        </button>
+                        <button class="px-3 py-1.5 text-sm text-white bg-blue-500 hover:bg-blue-600 rounded transition-colors">
+                            1
+                        </button>
+                        <button class="px-3 py-1.5 text-sm text-gray-400 border border-zinc-700 rounded hover:bg-zinc-800 transition-colors">
+                            2
+                        </button>
+                        <button class="px-3 py-1.5 text-sm text-gray-400 border border-zinc-700 rounded hover:bg-zinc-800 transition-colors">
+                            3
+                        </button>
+                        <span class="text-gray-500">...</span>
+                        <button class="px-3 py-1.5 text-sm text-gray-400 border border-zinc-700 rounded hover:bg-zinc-800 transition-colors">
+                            5
+                        </button>
+                        <button class="px-3 py-1.5 text-sm text-gray-400 border border-zinc-700 rounded hover:bg-zinc-800 transition-colors">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Sidebar -->
+        <aside class="fixed right-0 top-14 bottom-0 w-72 bg-dark-card border-l border-zinc-800 p-4 overflow-y-auto">
+            <!-- Test History Overview -->
+            <div class="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 mb-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <span>📊</span>
+                    <h3 class="font-semibold text-white">Test History Overview</h3>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-400">Total runs</span>
+                        <span class="mono text-white font-medium">47</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-400">Average pass rate</span>
+                        <span class="mono text-amber-400 font-medium">81.8%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-400">Total scenarios</span>
+                        <span class="mono text-white font-medium">47,000</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-400">Critical failures</span>
+                        <span class="mono text-red-400 font-medium">347</span>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-zinc-800">
+                    <div class="flex items-center gap-2 text-green-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                        <span class="text-sm font-medium">↗ +2.1% this week</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Improvements -->
+            <div class="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 mb-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-green-500">✓</span>
+                    <h3 class="font-semibold text-white">Recent Improvements</h3>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="p-3 bg-green-500/5 border border-green-500/20 rounded-lg">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-green-400 text-sm font-medium">Accent handling</span>
+                            <span class="text-green-400 text-xs">+3.2%</span>
+                        </div>
+                        <p class="text-xs text-gray-500">Runs #40 → #47</p>
+                    </div>
+                    <div class="p-3 bg-green-500/5 border border-green-500/20 rounded-lg">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-green-400 text-sm font-medium">Safety commands</span>
+                            <span class="text-green-400 text-xs">+1.8%</span>
+                        </div>
+                        <p class="text-xs text-gray-500">Runs #42 → #47</p>
+                    </div>
+                    <div class="p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-gray-400 text-sm font-medium">Noise handling</span>
+                            <span class="text-gray-500 text-xs">→ stable</span>
+                        </div>
+                        <p class="text-xs text-gray-500">No change this week</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Areas Needing Attention -->
+            <div class="bg-zinc-900/50 border border-amber-500/20 rounded-xl p-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-amber-500">⚠️</span>
+                    <h3 class="font-semibold text-white">Needs Attention</h3>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-red-400 text-sm font-medium">High noise (>95dB)</span>
+                            <span class="text-red-400 text-xs">↘ -2.1%</span>
+                        </div>
+                        <p class="text-xs text-gray-500">Declining since #44</p>
+                    </div>
+                    <div class="p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-amber-400 text-sm font-medium">Spanish commands</span>
+                            <span class="text-amber-400 text-xs">↘ -0.8%</span>
+                        </div>
+                        <p class="text-xs text-gray-500">Slight decline this week</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // Toggle expand/collapse for test run rows
+        function toggleExpand(id) {
+            const content = document.getElementById(`${id}-content`);
+            const icon = document.getElementById(`${id}-icon`);
+
+            // Close all other expanded rows
+            document.querySelectorAll('.expand-content.expanded').forEach(el => {
+                if (el.id !== `${id}-content`) {
+                    el.classList.remove('expanded');
+                    const otherId = el.id.replace('-content', '-icon');
+                    document.getElementById(otherId)?.classList.remove('rotate-180');
+                }
+            });
+
+            content.classList.toggle('expanded');
+            icon.classList.toggle('rotate-180');
+        }
+    </script>
+</body>
+</html>
