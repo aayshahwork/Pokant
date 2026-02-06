@@ -294,7 +294,7 @@ export default function LandingPage() {
             </div>
 
             <div className="hidden md:flex items-center gap-4">
-              <Link href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <Link href="/signin.html" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                 Sign in
               </Link>
               <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
