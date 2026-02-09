@@ -241,6 +241,13 @@ main.max-w-4xl {
   padding-right: var(--space-5) !important;
 }
 
+/* Live runs page: reduce indent so content aligns (body needs class="page-live-runs") */
+.page-live-runs .main-content,
+.page-live-runs main.p-8,
+.page-live-runs main.p-6 {
+  margin-left: 208px !important;
+}
+
 .kpi-grid,
 main .grid.grid-cols-3,
 main .grid.grid-cols-4 {

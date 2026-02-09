@@ -241,6 +241,13 @@ main.max-w-4xl {
   padding-right: var(--space-5) !important;
 }
 
+/* Live runs page: reduce indent so content aligns (body needs class="page-live-runs") */
+.page-live-runs .main-content,
+.page-live-runs main.p-8,
+.page-live-runs main.p-6 {
+  margin-left: 208px !important;
+}
+
 .kpi-grid,
 main .grid.grid-cols-3,
 main .grid.grid-cols-4 {
@@ -278,6 +285,41 @@ main .bg-card {
 .runs-table-wrap {
   border: 1px solid var(--color-border) !important;
   border-radius: var(--radius-md) !important;
+}
+
+/* Single grid for table so header and rows share column tracks and align */
+.runs-table {
+  display: grid !important;
+  grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+  gap: 0 1rem !important;
+}
+
+.runs-table-header {
+  grid-column: 1 / -1;
+  display: grid !important;
+  grid-template-columns: subgrid !important;
+  align-items: center;
+  padding: 0.75rem 0 !important;
+  border-bottom: 1px solid var(--color-border) !important;
+}
+
+.runs-table-row {
+  grid-column: 1 / -1;
+  display: grid !important;
+  grid-template-columns: subgrid !important;
+  align-items: center;
+  padding: 1rem 0 !important;
+  border-bottom: 1px solid var(--color-border) !important;
+  text-decoration: none;
+  color: inherit;
+}
+
+.runs-table-row:last-of-type {
+  border-bottom: none !important;
+}
+
+.runs-table-fullrow {
+  grid-column: 1 / -1;
 }
 
 .runs-table-grid { align-items: center; }
@@ -440,5 +482,6 @@ button:disabled,
   }
 
   .runs-table-wrap { overflow-x: auto; }
+  .runs-table,
   .runs-table-grid { min-width: 860px; }
 }
