@@ -364,7 +364,19 @@ button:disabled,
 @media (max-width: 1180px) {
   .sidebar,
   .sidebar-widget {
-    display: none !important;
+    display: block !important;
+    left: 0 !important;
+    width: 248px !important;
+    transform: translateX(calc(-100% + 12px)) !important;
+    transition: transform 180ms ease;
+    z-index: 70;
+  }
+
+  .sidebar:hover,
+  .sidebar:focus-within,
+  .sidebar-widget:hover,
+  .sidebar-widget:focus-within {
+    transform: translateX(0) !important;
   }
 
   .main-content,
