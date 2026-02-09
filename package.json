@@ -4,8 +4,8 @@
   "scripts": {
     "dev": "pnpm --filter ./pokant-landing-page dev",
     "build": "pnpm --filter ./pokant-landing-page build",
+    "build:cloudflare": "bash scripts/build-cloudflare-pages.sh",
     "start": "pnpm --filter ./pokant-landing-page start",
     "install:all": "pnpm --filter ./pokant-landing-page install"
   }
 }
-
