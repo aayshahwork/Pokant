@@ -176,8 +176,9 @@
             opacity: 1;
         }
     </style>
+    <link rel='stylesheet' href='dashboard-modern.css'>
 </head>
-<body class="bg-background min-h-screen">
+<body class="bg-background min-h-screen app-shell">
     <!-- Toast Notification -->
     <div id="toast" class="toast">
         <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,7 +188,7 @@
     </div>
 
     <!-- Top Navigation -->
-    <nav class="bg-white border-b border-border sticky top-0 z-50">
+    <nav class="bg-white border-b border-border sticky top-0 z-50 app-topbar">
         <div class="px-10 h-16 flex items-center justify-between">
             <div class="flex items-center gap-8">
                 <a href="/" class="text-xl font-bold text-text-dark">Pokant</a>
@@ -261,7 +262,7 @@
     <main id="main-content" class="main-content p-8">
         <div class="max-w-4xl mx-auto">
             <!-- Page Header -->
-            <div class="mb-8">
+            <div class="page-header">
                 <h1 class="text-2xl font-bold text-text-dark mb-2">Settings</h1>
                 <p class="text-text-light">Manage your API integration, connected bots, and account preferences</p>
             </div>
@@ -798,3 +799,5 @@ analysis = client.analyze.<span class="function">get_patterns</span>(
     </script>
 </body>
 </html>
+
+

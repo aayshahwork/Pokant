@@ -96,10 +96,11 @@
             transform: rotate(180deg);
         }
     </style>
+    <link rel='stylesheet' href='dashboard-modern.css'>
 </head>
-<body class="bg-background min-h-screen">
+<body class="bg-background min-h-screen app-shell">
     <!-- Top Navigation -->
-    <nav class="bg-white border-b border-border sticky top-0 z-50">
+    <nav class="bg-white border-b border-border sticky top-0 z-50 app-topbar">
         <div class="px-6 h-16 flex items-center justify-between">
             <a href="/" class="text-xl font-bold text-text-dark">Pokant</a>
             <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-border">
@@ -173,7 +174,7 @@
         <!-- Main Content -->
         <main class="flex-1 p-6 mr-72">
             <!-- Header -->
-            <div class="flex items-start justify-between mb-6">
+            <div class="page-header header-row">
                 <div>
                     <h1 class="text-2xl font-bold text-text-dark mb-1">Test Runs</h1>
                     <p class="text-text-light">Track all optimization tests across your voice bots</p>
@@ -187,7 +188,7 @@
             </div>
 
             <!-- Filter Bar -->
-            <div class="bg-white border border-border rounded-xl p-4 mb-6 shadow-sm">
+            <div class="panel bg-white border border-border rounded-xl p-4 mb-6 shadow-sm">
                 <div class="flex items-center gap-4">
                     <!-- Search -->
                     <div class="flex-1 relative">
@@ -223,9 +224,9 @@
             </div>
 
             <!-- Test Runs Table -->
-            <div class="bg-white border border-border rounded-xl overflow-hidden shadow-sm">
+            <div class="runs-table-wrap bg-white border border-border rounded-xl overflow-hidden shadow-sm">
                 <!-- Table Header -->
-                <div class="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-border text-xs font-medium text-text-light uppercase tracking-wider">
+                <div class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-border text-xs font-medium text-text-light uppercase tracking-wider">
                     <div class="col-span-1">Run #</div>
                     <div class="col-span-2">Bot</div>
                     <div class="col-span-3">Pattern</div>
@@ -237,8 +238,16 @@
 
                 <!-- Table Rows -->
                 <div class="divide-y divide-border">
+                    <div id="test-runs-empty" class="state-block hidden m-4">
+                        <p class="state-empty-title">No test runs found</p>
+                        <p class="state-empty-copy">Try adjusting filters or run a new test.</p>
+                    </div>
+                    <div id="test-runs-error" class="state-block state-error hidden m-4">
+                        <p class="state-error-title">Unable to load test runs</p>
+                        <p class="state-error-copy">Refresh the page or try again in a minute.</p>
+                    </div>
                     <!-- Row 1 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#47</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -271,7 +280,7 @@
                     </a>
 
                     <!-- Row 2 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#46</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -304,7 +313,7 @@
                     </a>
 
                     <!-- Row 3 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#45</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -337,7 +346,7 @@
                     </a>
 
                     <!-- Row 4 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#44</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -370,7 +379,7 @@
                     </a>
 
                     <!-- Row 5 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#43</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -403,7 +412,7 @@
                     </a>
 
                     <!-- Row 6 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#42</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -436,7 +445,7 @@
                     </a>
 
                     <!-- Row 7 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#41</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -469,7 +478,7 @@
                     </a>
 
                     <!-- Row 8 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#40</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -502,7 +511,7 @@
                     </a>
 
                     <!-- Row 9 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#39</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -535,7 +544,7 @@
                     </a>
 
                     <!-- Row 10 -->
-                    <a href="testing.html" class="grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
                         <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#38</div>
                         <div class="col-span-2">
                             <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
@@ -713,3 +722,6 @@
     </script>
 </body>
 </html>
+
+
+

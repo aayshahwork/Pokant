@@ -159,10 +159,11 @@
             z-index: 1000;
         }
     </style>
+    <link rel='stylesheet' href='dashboard-modern.css'>
 </head>
-<body class="bg-background min-h-screen">
+<body class="bg-background min-h-screen app-shell">
     <!-- Top Navigation -->
-    <nav class="bg-white border-b border-border sticky top-0 z-50 h-16">
+    <nav class="bg-white border-b border-border sticky top-0 z-50 app-topbar h-16">
         <div class="px-6 h-full flex items-center justify-between">
             <a href="/" class="text-xl font-bold text-text-dark">Pokant</a>
             <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-border">
@@ -233,10 +234,23 @@
 
     <!-- Main Content -->
     <main class="main-content p-8">
+        <section class="page-header header-row" aria-label="Dashboard overview">
+            <div>
+                <h1 class="text-2xl font-bold text-text-dark mb-1">Dashboard</h1>
+                <p class="text-text-light">Voice bot performance, risk patterns, and optimization opportunities in one view.</p>
+            </div>
+            <a href="testing.html" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-blue-600 text-white font-medium rounded-lg transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Run New Test
+            </a>
+        </section>
+
         <!-- KPI Cards Row -->
-        <div class="grid grid-cols-3 gap-6 mb-8">
+        <div class="kpi-grid grid grid-cols-3 gap-6 mb-8">
             <!-- Success Rate Card -->
-            <div class="bg-white rounded-xl border border-border shadow-sm p-6 relative">
+            <div class="kpi-card kpi-primary bg-white rounded-xl border border-border shadow-sm p-6 relative">
                 <div class="flex items-start justify-between mb-4">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,7 +268,7 @@
             </div>
 
             <!-- Total Calls Card -->
-            <div class="bg-white rounded-xl border border-border shadow-sm p-6 relative">
+            <div class="kpi-card bg-white rounded-xl border border-border shadow-sm p-6 relative">
                 <div class="flex items-center gap-2 mb-4">
                     <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
@@ -268,7 +282,7 @@
             </div>
 
             <!-- Revenue Lost Card -->
-            <div class="bg-white rounded-xl border border-border shadow-sm p-6 relative">
+            <div class="kpi-card bg-white rounded-xl border border-border shadow-sm p-6 relative">
                 <div class="flex items-start justify-between mb-4">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -287,10 +301,21 @@
         </div>
 
         <!-- Chart Section -->
-        <div class="bg-white rounded-xl border border-border shadow-sm p-6 mb-8">
+        <div class="panel bg-white rounded-xl border border-border shadow-sm p-6 mb-8">
             <h2 class="text-lg font-semibold text-text-dark mb-6">Success Rate Trend (Last 4 Weeks)</h2>
+            <div id="dashboard-chart-loading" class="chart-loading state-block">
+                <div class="skeleton-chart"></div>
+            </div>
             <div class="h-72">
                 <canvas id="successChart"></canvas>
+            </div>
+            <div id="dashboard-chart-empty" class="chart-empty state-block hidden">
+                <p class="state-empty-title">No trend data yet</p>
+                <p class="state-empty-copy">Run additional calls to populate weekly success-rate history.</p>
+            </div>
+            <div id="dashboard-chart-error" class="chart-error state-block state-error hidden">
+                <p class="state-error-title">Chart unavailable</p>
+                <p class="state-error-copy">We could not render trend data right now.</p>
             </div>
         </div>
 
@@ -406,13 +431,15 @@
         }
 
         // Success Rate Chart
-        const ctx = document.getElementById('successChart').getContext('2d');
+        const chartLoading = document.getElementById('dashboard-chart-loading');
+        const chartError = document.getElementById('dashboard-chart-error');
+        try {
+            const ctx = document.getElementById('successChart').getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.1)');
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
 
-        const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.1)');
-        gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
-
-        new Chart(ctx, {
+            new Chart(ctx, {
             type: 'line',
             data: {
                 labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
@@ -486,7 +513,14 @@
                     mode: 'index'
                 }
             }
-        });
+            });
+            chartLoading.classList.add('hidden');
+        } catch (e) {
+            chartLoading.classList.add('hidden');
+            chartError.classList.remove('hidden');
+        }
     </script>
 </body>
 </html>
+
+

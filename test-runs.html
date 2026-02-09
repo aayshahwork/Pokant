@@ -1,107 +1,727 @@
 <!DOCTYPE html>
 <html lang="en">
-<!--
-    All Voxture code commented out for Pokant landing page.
-    Restore from test-runs-voxture-backup.html to restore original Voxture UI.
--->
-<!--
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voxture - Test Runs</title>
+    <title>Pokant - Test Runs</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: {
-                        dark: {
-                            bg: '#0a0a0a',
-                            card: '#1a1a1a',
-                            border: '#27272a'
-                        }
-                    },
                     fontFamily: {
-                        mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    colors: {
+                        background: '#FAFAFA',
+                        card: '#FFFFFF',
+                        border: '#E5E7EB',
+                        'text-dark': '#111827',
+                        'text-medium': '#374151',
+                        'text-light': '#6B7280',
+                        primary: '#3B82F6',
+                        success: '#10B981',
+                        error: '#EF4444',
+                        warning: '#F59E0B'
                     }
                 }
             }
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0a0a0a;
+            background-color: #FAFAFA;
         }
-
-        .mono {
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #1a1a1a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #3f3f46;
-            border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #52525b;
-        }
-
-        /* Pulse animation for live indicator */
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .pulse-dot {
-            animation: pulse-dot 2s ease-in-out infinite;
-        }
-
-        /* Expandable row animation */
-        .expand-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
-            opacity: 0;
-        }
-        .expand-content.expanded {
-            max-height: 800px;
-            opacity: 1;
-        }
-
-        /* Table row hover */
         .table-row:hover {
-            background-color: rgba(39, 39, 42, 0.5);
+            background-color: #F9FAFB;
         }
-
-        /* Progress bar animation */
-        @keyframes progress-fill {
-            from { width: 0; }
+        .table-row {
+            cursor: pointer;
+            transition: background-color 0.15s;
         }
-        .progress-animated {
-            animation: progress-fill 0.8s ease-out;
+        /* Sidebar Widget */
+        .sidebar-widget {
+            position: fixed;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            width: 40px;
+            background: white;
+            border: 1px solid #E5E7EB;
+            border-left: none;
+            border-radius: 0 8px 8px 0;
+            z-index: 1000;
+            transition: width 300ms ease;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .sidebar-widget.expanded {
+            width: 240px;
+        }
+        .sidebar-widget .toggle-tab {
+            width: 40px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: absolute;
+            right: 0;
+            top: 0;
+        }
+        .sidebar-widget.expanded .toggle-tab {
+            border-left: 1px solid #E5E7EB;
+            background: #F9FAFB;
+        }
+        .sidebar-widget .nav-content {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 200ms ease;
+            padding: 16px;
+            padding-right: 56px;
+        }
+        .sidebar-widget.expanded .nav-content {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .sidebar-widget .toggle-icon {
+            transition: transform 300ms ease;
+        }
+        .sidebar-widget.expanded .toggle-icon {
+            transform: rotate(180deg);
         }
     </style>
+    <link rel='stylesheet' href='dashboard-modern.css'>
 </head>
-<body class="bg-dark-bg text-gray-200 min-h-screen">
-    <!-- All Voxture UI code commented out for Pokant landing page. Restore from *-voxture-backup.html -->
-    <div class="min-h-screen flex items-center justify-center text-gray-400"><p>Pokant landing page - add your content here.</p></div>
-</body>
--->
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pokant Landing Page</title>
-</head>
-<body>
-    <!-- Add your Pokant landing page content here -->
+<body class="bg-background min-h-screen app-shell">
+    <!-- Top Navigation -->
+    <nav class="bg-white border-b border-border sticky top-0 z-50 app-topbar">
+        <div class="px-6 h-16 flex items-center justify-between">
+            <a href="/" class="text-xl font-bold text-text-dark">Pokant</a>
+            <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-border">
+                <div class="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                <span class="text-sm text-text-light">Voice Bot:</span>
+                <span class="text-sm font-medium text-text-dark">ConstructBot v2</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="settings.html" class="flex items-center gap-2 text-text-medium hover:text-text-dark transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span class="text-sm font-medium">Settings</span>
+                </a>
+                <a href="signin.html" class="flex items-center gap-2 text-text-medium hover:text-text-dark transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                    </svg>
+                    <span class="text-sm font-medium">Logout</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar Widget -->
+    <div id="sidebar-widget" class="sidebar-widget">
+        <div class="nav-content">
+            <nav class="space-y-1">
+                <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-medium hover:text-text-dark hover:bg-gray-50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                    </svg>
+                    <span class="font-medium text-sm">Home</span>
+                </a>
+                <a href="test-runs.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-blue-50 text-primary border border-blue-100">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                    </svg>
+                    <span class="text-sm">Test Runs</span>
+                </a>
+                <a href="analytics.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-medium hover:text-text-dark hover:bg-gray-50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <span class="text-sm">Analytics</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-medium hover:text-text-dark hover:bg-gray-50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                    </svg>
+                    <span class="text-sm">Dataset</span>
+                </a>
+                <a href="settings.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-medium hover:text-text-dark hover:bg-gray-50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span class="text-sm">Settings</span>
+                </a>
+            </nav>
+        </div>
+        <div class="toggle-tab" onclick="toggleSidebar()">
+            <svg class="w-5 h-5 text-text-light toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+        </div>
+    </div>
+
+    <div class="flex">
+        <!-- Main Content -->
+        <main class="flex-1 p-6 mr-72">
+            <!-- Header -->
+            <div class="page-header header-row">
+                <div>
+                    <h1 class="text-2xl font-bold text-text-dark mb-1">Test Runs</h1>
+                    <p class="text-text-light">Track all optimization tests across your voice bots</p>
+                </div>
+                <a href="testing.html" class="px-5 py-2.5 bg-primary hover:bg-blue-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    Run New Test
+                </a>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="panel bg-white border border-border rounded-xl p-4 mb-6 shadow-sm">
+                <div class="flex items-center gap-4">
+                    <!-- Search -->
+                    <div class="flex-1 relative">
+                        <svg class="w-5 h-5 text-text-light absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <input type="text" placeholder="Search by run #, bot name, or pattern..." class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-border rounded-lg text-text-dark placeholder-text-light focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+                    </div>
+
+                    <!-- Bot Filter -->
+                    <select class="px-4 py-2.5 bg-gray-50 border border-border rounded-lg text-text-medium focus:outline-none focus:border-primary">
+                        <option>All Bots</option>
+                        <option>ConstructBot v2</option>
+                        <option>SalesBot v1</option>
+                    </select>
+
+                    <!-- Pattern Filter -->
+                    <select class="px-4 py-2.5 bg-gray-50 border border-border rounded-lg text-text-medium focus:outline-none focus:border-primary">
+                        <option>All Patterns</option>
+                        <option>Customer Changes Mind</option>
+                        <option>Complex Scheduling</option>
+                        <option>Unclear Availability</option>
+                    </select>
+
+                    <!-- Date Filter -->
+                    <select class="px-4 py-2.5 bg-gray-50 border border-border rounded-lg text-text-medium focus:outline-none focus:border-primary">
+                        <option>Last 7 days</option>
+                        <option>Last 30 days</option>
+                        <option>Last 90 days</option>
+                        <option>All time</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Test Runs Table -->
+            <div class="runs-table-wrap bg-white border border-border rounded-xl overflow-hidden shadow-sm">
+                <!-- Table Header -->
+                <div class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-border text-xs font-medium text-text-light uppercase tracking-wider">
+                    <div class="col-span-1">Run #</div>
+                    <div class="col-span-2">Bot</div>
+                    <div class="col-span-3">Pattern</div>
+                    <div class="col-span-2">Pass Rate</div>
+                    <div class="col-span-1">Critical</div>
+                    <div class="col-span-2">Date/Time</div>
+                    <div class="col-span-1">Status</div>
+                </div>
+
+                <!-- Table Rows -->
+                <div class="divide-y divide-border">
+                    <div id="test-runs-empty" class="state-block hidden m-4">
+                        <p class="state-empty-title">No test runs found</p>
+                        <p class="state-empty-copy">Try adjusting filters or run a new test.</p>
+                    </div>
+                    <div id="test-runs-error" class="state-block state-error hidden m-4">
+                        <p class="state-error-title">Unable to load test runs</p>
+                        <p class="state-error-copy">Refresh the page or try again in a minute.</p>
+                    </div>
+                    <!-- Row 1 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#47</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-error">
+                                Customer Changes Mind
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-success">82.3%</span>
+                            <span class="text-xs text-text-light ml-1">(823/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">7</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Feb 4, 2026</p>
+                            <p class="text-xs text-text-light">2:34 PM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+
+                    <!-- Row 2 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#46</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-error">
+                                Customer Changes Mind
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-success">82.0%</span>
+                            <span class="text-xs text-text-light ml-1">(820/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">9</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Feb 3, 2026</p>
+                            <p class="text-xs text-text-light">10:15 AM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+
+                    <!-- Row 3 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#45</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-orange-50 text-warning">
+                                Complex Scheduling
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-success">83.1%</span>
+                            <span class="text-xs text-text-light ml-1">(831/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">5</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Feb 2, 2026</p>
+                            <p class="text-xs text-text-light">9:47 AM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+
+                    <!-- Row 4 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#44</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-orange-50 text-warning">
+                                Complex Scheduling
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-success">85.4%</span>
+                            <span class="text-xs text-text-light ml-1">(854/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">3</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Jan 31, 2026</p>
+                            <p class="text-xs text-text-light">3:22 PM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+
+                    <!-- Row 5 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#43</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-600">
+                                Unclear Availability
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-success">81.2%</span>
+                            <span class="text-xs text-text-light ml-1">(812/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">6</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Jan 30, 2026</p>
+                            <p class="text-xs text-text-light">11:08 AM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+
+                    <!-- Row 6 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#42</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-error">
+                                Customer Changes Mind
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-warning">79.8%</span>
+                            <span class="text-xs text-text-light ml-1">(798/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">11</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Jan 29, 2026</p>
+                            <p class="text-xs text-text-light">4:55 PM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+
+                    <!-- Row 7 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#41</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-orange-50 text-warning">
+                                Complex Scheduling
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-success">84.6%</span>
+                            <span class="text-xs text-text-light ml-1">(846/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">4</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Jan 28, 2026</p>
+                            <p class="text-xs text-text-light">1:20 PM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+
+                    <!-- Row 8 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#40</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-600">
+                                Unclear Availability
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-warning">78.9%</span>
+                            <span class="text-xs text-text-light ml-1">(789/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">8</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Jan 27, 2026</p>
+                            <p class="text-xs text-text-light">9:33 AM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+
+                    <!-- Row 9 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#39</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-error">
+                                Customer Changes Mind
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-warning">77.5%</span>
+                            <span class="text-xs text-text-light ml-1">(775/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">14</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Jan 26, 2026</p>
+                            <p class="text-xs text-text-light">2:47 PM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+
+                    <!-- Row 10 -->
+                    <a href="testing.html" class="grid runs-table-grid grid-cols-12 gap-4 px-6 py-4 table-row items-center">
+                        <div class="col-span-1 font-mono text-sm text-text-dark font-medium">#38</div>
+                        <div class="col-span-2">
+                            <p class="text-sm font-medium text-text-dark">ConstructBot v2</p>
+                            <p class="text-xs text-text-light">Production</p>
+                        </div>
+                        <div class="col-span-3">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-orange-50 text-warning">
+                                Complex Scheduling
+                            </span>
+                        </div>
+                        <div class="col-span-2">
+                            <span class="font-mono text-sm font-semibold text-success">82.8%</span>
+                            <span class="text-xs text-text-light ml-1">(828/1000)</span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-mono text-sm text-error font-medium">5</span>
+                        </div>
+                        <div class="col-span-2 text-sm text-text-medium">
+                            <p>Jan 26, 2026</p>
+                            <p class="text-xs text-text-light">9:12 AM</p>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="inline-flex items-center gap-1 text-success text-sm">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Done
+                            </span>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- Pagination -->
+                <div class="px-6 py-4 bg-gray-50 border-t border-border flex items-center justify-between">
+                    <p class="text-sm text-text-light">Showing 10 of 47 test runs</p>
+                    <div class="flex items-center gap-2">
+                        <button class="px-4 py-2 text-sm text-text-light border border-border rounded-lg hover:bg-white transition-colors disabled:opacity-50" disabled>
+                            Previous
+                        </button>
+                        <button class="px-4 py-2 text-sm text-white bg-primary hover:bg-blue-600 rounded-lg transition-colors">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Sidebar -->
+        <aside class="fixed right-0 top-16 bottom-0 w-72 bg-white border-l border-border p-4 overflow-y-auto">
+            <!-- Overall Stats Card -->
+            <div class="bg-gray-50 border border-border rounded-xl p-4 mb-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    <h3 class="font-semibold text-text-dark">Overall Stats</h3>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-text-light">Total test runs</span>
+                        <span class="font-mono text-sm font-semibold text-text-dark">47</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-text-light">Avg pass rate</span>
+                        <span class="font-mono text-sm font-semibold text-success">81.4%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-text-light">Edge cases tested</span>
+                        <span class="font-mono text-sm font-semibold text-text-dark">47,000</span>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-border">
+                    <div class="flex items-center gap-1 text-success text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                        </svg>
+                        <span class="font-medium">+2.1%</span>
+                        <span class="text-text-light">this week</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Improvements Card -->
+            <div class="bg-gray-50 border border-border rounded-xl p-4 mb-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <h3 class="font-semibold text-text-dark">Recent Improvements</h3>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-medium text-text-dark">Accent handling</span>
+                            <span class="text-sm font-semibold text-success">+3.2%</span>
+                        </div>
+                        <p class="text-xs text-text-light">Runs #40 → #47</p>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-medium text-text-dark">Safety commands</span>
+                            <span class="text-sm font-semibold text-success">+1.8%</span>
+                        </div>
+                        <p class="text-xs text-text-light">Runs #42 → #47</p>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-medium text-text-dark">Noise handling</span>
+                            <span class="text-sm font-medium text-text-light">→ stable</span>
+                        </div>
+                        <p class="text-xs text-text-light">No change this week</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Needs Attention Card -->
+            <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <svg class="w-5 h-5 text-warning" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <h3 class="font-semibold text-text-dark">Needs Attention</h3>
+                </div>
+
+                <p class="text-sm text-text-medium mb-3">
+                    <span class="font-semibold">Customer Changes Mind</span> pattern is declining
+                </p>
+                <p class="text-xs text-text-light mb-3">
+                    Pass rate dropped 2.3% in the last 3 runs
+                </p>
+
+                <a href="testing.html" class="inline-flex items-center gap-1 text-sm font-medium text-warning hover:text-orange-600 transition-colors">
+                    Investigate Pattern
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Usage Card -->
+            <div class="bg-gray-50 border border-border rounded-xl p-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <svg class="w-5 h-5 text-text-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <h3 class="font-semibold text-text-dark">Usage This Month</h3>
+                </div>
+
+                <div class="mb-3">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-text-light">Test runs</span>
+                        <span class="font-mono text-text-dark">47 / 100</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div class="h-full bg-primary rounded-full" style="width: 47%"></div>
+                    </div>
+                </div>
+
+                <button class="w-full py-2 text-sm font-medium text-primary hover:text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+                    Upgrade Plan
+                </button>
+            </div>
+        </aside>
+    </div>
+    <script>
+        // Sidebar toggle functionality
+        function toggleSidebar() {
+            document.getElementById('sidebar-widget').classList.toggle('expanded');
+        }
+    </script>
 </body>
 </html>
+
+
+
