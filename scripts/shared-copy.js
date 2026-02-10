@@ -3,15 +3,15 @@
     testing: {
       introTitle: "Generated variants for this failure pattern",
       introBody:
-        "These responses are generated from the exact breakdown in Run #47 (defer - cancel - CRM 422). Pick one and deploy with staged safety checks.",
+        "These responses are generated from the exact breakdown in Run #47 (defer - escalation - ticket system 422). Pick one and deploy with staged safety checks.",
       validationBody:
-        "Model family benchmark: 3,420 prior production calls, 91.6% success rate on defer/cancel recovery flows, 97.9% CRM write success with retry enabled.",
+        "Model family benchmark: 3,420 prior production calls, 91.6% success rate on defer/escalation recovery flows, 97.9% ticket system write success with retry enabled.",
       rolloutBody:
         "Deploy selected variant to 10% traffic for 30 minutes, then 50% for 2 hours if cancel sync stays above 97%, then 100% rollout.",
     },
     callBreakdown: {
       recommendation:
-        "Add a customer-cancelled handoff path: confirm cancellation verbally, map to correct Hubspot field/status, and add retry + alert on sync failure. Use generated variants to test this flow.",
+        "Add a customer-escalation handoff path: confirm escalation verbally, map to correct Zendesk field/status, and add retry + alert on sync failure. Use generated variants to test this flow.",
     },
   };
 

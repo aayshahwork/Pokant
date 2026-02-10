@@ -52,7 +52,7 @@
             <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-border">
                 <div class="w-2 h-2 bg-success rounded-full animate-pulse"></div>
                 <span class="text-sm text-text-light">Voice Bot:</span>
-                <span class="text-sm font-medium text-text-dark">SalesBot</span>
+                <span class="text-sm font-medium text-text-dark">ServiceBot</span>
             </div>
             <div class="flex items-center gap-4">
                 <a href="settings.html" class="flex items-center gap-2 text-text-medium hover:text-text-dark transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -103,7 +103,7 @@
             <div class="flex items-start justify-between flex-wrap gap-4">
                 <div>
                     <h1 class="text-2xl font-bold text-text-dark mb-1">Call breakdown · Run #47</h1>
-                    <p class="text-text-light">Customer Changes Mind · Feb 4, 2026 2:34 PM</p>
+                    <p class="text-text-light">Customer Requests Escalation · Feb 4, 2026 2:34 PM</p>
                 </div>
                 <span class="px-3 py-1.5 text-sm font-medium text-error bg-red-50 rounded-lg border border-red-100">Fail</span>
             </div>
@@ -141,7 +141,7 @@
                     <div class="flex-1 flex items-center">
                         <div class="flex flex-col items-center flex-1">
                             <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">1</div>
-                            <p class="text-xs text-text-medium mt-2 text-center">Bot confirmed<br>appointment</p>
+                            <p class="text-xs text-text-medium mt-2 text-center">Bot confirmed<br>resolution</p>
                         </div>
                         <div class="flex-1 h-0.5 bg-gray-200 mx-1"></div>
                         <div class="flex flex-col items-center flex-1">
@@ -156,7 +156,7 @@
                         <div class="flex-1 h-0.5 bg-gray-200 mx-1"></div>
                         <div class="flex flex-col items-center flex-1 relative">
                             <div class="w-10 h-10 rounded-full bg-error flex items-center justify-center text-white text-xs font-bold">4</div>
-                            <p class="text-xs text-text-medium mt-2 text-center">Customer<br>cancelled</p>
+                            <p class="text-xs text-text-medium mt-2 text-center">Customer requested<br>escalation</p>
                             <div class="absolute -top-12 left-1/2 -translate-x-1/2 flex flex-col items-center">
                                 <div class="px-3 py-1.5 bg-error text-white text-xs font-semibold rounded shadow-lg whitespace-nowrap">Breakdown here</div>
                                 <div class="w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-error"></div>
@@ -165,11 +165,11 @@
                         <div class="flex-1 h-0.5 bg-gray-200 mx-1"></div>
                         <div class="flex flex-col items-center flex-1">
                             <div class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-500 text-xs font-bold">5</div>
-                            <p class="text-xs text-text-light mt-2 text-center">Hubspot update<br><span class="text-error font-medium">failed</span></p>
+                            <p class="text-xs text-text-light mt-2 text-center">Zendesk update<br><span class="text-error font-medium">failed</span></p>
                         </div>
                     </div>
                 </div>
-                <p class="text-sm text-text-light mt-6 text-center">Bot did not retry or re-engage after customer cancelled; Hubspot sync failed at end of call.</p>
+                <p class="text-sm text-text-light mt-6 text-center">Bot did not retry or re-engage after customer requested escalation; Zendesk sync failed at end of call.</p>
             </div>
         </div>
 
@@ -198,7 +198,7 @@
                             <td class="py-3 pr-4 font-mono">94%</td>
                             <td class="py-3 pr-4">142 wpm</td>
                             <td class="py-3 pr-4">—</td>
-                            <td class="py-3 pr-4">confirm_appointment</td>
+                            <td class="py-3 pr-4">confirm_resolution</td>
                         </tr>
                         <tr class="border-b border-border">
                             <td class="py-3 pr-4 font-mono text-xs">0:12</td>
@@ -225,12 +225,12 @@
                             <td class="py-3 pr-4 font-mono">92%</td>
                             <td class="py-3 pr-4">98 wpm</td>
                             <td class="py-3 pr-4">1.2s</td>
-                            <td class="py-3 pr-4"><span class="text-error font-medium">cancel_appointment</span></td>
+                            <td class="py-3 pr-4"><span class="text-error font-medium">request_escalation</span></td>
                         </tr>
                         <tr class="border-b border-border">
                             <td class="py-3 pr-4 font-mono text-xs">0:52</td>
                             <td class="py-3 pr-4">—</td>
-                            <td class="py-3 pr-4" colspan="5"><span class="text-error font-medium">Call ended.</span> CRM sync attempted; Hubspot API returned 422 (validation error). No retry.</td>
+                            <td class="py-3 pr-4" colspan="5"><span class="text-error font-medium">Call ended.</span> ticket system sync attempted; Zendesk API returned 422 (validation error). No retry.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -251,11 +251,11 @@
                 </li>
                 <li class="flex gap-3">
                     <span class="font-mono text-xs text-text-light shrink-0 w-10">0:38</span>
-                    <div><span class="font-medium text-error">Context hallucination</span> - Bot implied the appointment was still finalized even after a defer signal. Response was generated from stale context state, which increased confusion before cancel intent.</div>
+                    <div><span class="font-medium text-error">Context hallucination</span> - Bot implied the issue was already resolved even after a defer signal. Response was generated from stale context state, which increased confusion before escalation intent.</div>
                 </li>
                 <li class="flex gap-3">
                     <span class="font-mono text-xs text-text-light shrink-0 w-10">0:41</span>
-                    <div><span class="font-medium text-error">Explicit cancel</span> - Intent <code class="text-xs bg-gray-100 px-1 rounded">cancel_appointment</code> at 92% confidence. Bot ended call without confirming cancellation in Hubspot; sync failed (422).</div>
+                    <div><span class="font-medium text-error">Explicit cancel</span> - Intent <code class="text-xs bg-gray-100 px-1 rounded">request_escalation</code> at 92% confidence. Bot ended call without confirming escalation in Zendesk; sync failed (422).</div>
                 </li>
             </ul>
         </div>
@@ -266,15 +266,15 @@
             <div class="grid md:grid-cols-3 gap-6 text-sm">
                 <div>
                     <p class="font-medium text-text-light uppercase tracking-wider mb-2">What happened</p>
-                    <p class="text-text-medium">Customer explicitly cancelled the appointment. Before that, the bot hallucinated that the slot was still confirmed because it responded from stale context after a defer signal. It then closed the call and triggered a Hubspot update; the API returned 422 (invalid or missing fields). No retry or fallback was executed, so the CRM was left out of sync.</p>
+                    <p class="text-text-medium">Customer explicitly requested escalation to a human agent. Before that, the bot hallucinated that the issue was resolved because it responded from stale context after a defer signal. It then closed the call and triggered a Zendesk update; the API returned 422 (invalid or missing fields). No retry or fallback was executed, so the ticket system was left out of sync.</p>
                 </div>
                 <div>
                     <p class="font-medium text-text-light uppercase tracking-wider mb-2">Expected</p>
-                    <p class="text-text-medium">Bot should re-ground on latest call context (intent + slot status), confirm cancellation in-natural language, send a valid payload to Hubspot (e.g. status = Cancelled), and retry or flag on failure so the record is updated or queued for manual review.</p>
+                    <p class="text-text-medium">Bot should re-ground on latest call context (intent + ticket status), confirm escalation in natural language, send a valid payload to Zendesk (e.g. status = Escalated), and retry or flag on failure so the record is updated or queued for manual review.</p>
                 </div>
                 <div>
                     <p class="font-medium text-text-light uppercase tracking-wider mb-2">Recommendation</p>
-                    <p class="text-text-medium">Add a customer-cancelled handoff path with context lock: refresh intent/slot state before each response, prevent ungrounded slot claims, map to correct Hubspot field/status, and add retry + alert on sync failure. Use generated variants to test this flow.</p>
+                    <p class="text-text-medium">Add a customer-escalation handoff path with context lock: refresh intent/ticket state before each response, prevent ungrounded resolution claims, map to correct Zendesk field/status, and add retry + alert on sync failure. Use generated variants to test this flow.</p>
                 </div>
             </div>
         </div>
@@ -288,7 +288,7 @@
                     <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg></div>
                     <div class="min-w-0">
                         <p class="text-xs font-medium text-text-dark mb-1">Bot <span class="text-text-light font-normal font-mono">0:00 - 0:11</span></p>
-                        <p class="text-sm text-text-medium">I've confirmed your appointment for next Tuesday at 2 PM. Anything else?</p>
+                        <p class="text-sm text-text-medium">I've submitted a refund request for your order #4821. You should see it reflected within 3-5 business days. Anything else?</p>
                         <p class="text-xs text-text-light mt-1.5">Sentiment: positive - Confidence: 94%</p>
                     </div>
                 </div>
@@ -296,7 +296,7 @@
                     <div class="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>
                     <div class="min-w-0">
                         <p class="text-xs font-medium text-text-dark mb-1">Customer <span class="text-text-light font-normal font-mono">0:12 - 0:26</span></p>
-                        <p class="text-sm text-text-medium">Actually, let me think about it and call back later.</p>
+                        <p class="text-sm text-text-medium">Actually, this isn't what I asked for. I want to speak to a real person about this.</p>
                         <p class="text-xs text-text-light mt-1.5">Sentiment: uncertain - Intent: defer_decision</p>
                     </div>
                 </div>
@@ -304,7 +304,7 @@
                     <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg></div>
                     <div class="min-w-0">
                         <p class="text-xs font-medium text-text-dark mb-1">Bot <span class="text-text-light font-normal font-mono">0:28 - 0:39</span></p>
-                        <p class="text-sm text-text-medium">Sure, your Tuesday 2 PM slot is still confirmed. Is there anything specific you'd like to reconsider?</p>
+                        <p class="text-sm text-text-medium">I understand your frustration. Let me see if I can connect you with a support agent right away.</p>
                         <p class="text-xs text-text-light mt-1.5">Sentiment: neutral - Confidence: 89% - Grounding: stale context</p>
                     </div>
                 </div>
@@ -312,8 +312,8 @@
                     <div class="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg></div>
                     <div class="min-w-0">
                         <p class="text-xs font-medium text-text-dark mb-1">Customer <span class="text-text-light font-normal font-mono">0:41 - 0:50</span></p>
-                        <p class="text-sm text-text-medium">No, I will check my schedule. Thanks.</p>
-                        <p class="text-xs text-error font-medium mt-1.5">Call ended - Intent: cancel_appointment - Hubspot update failed (422)</p>
+                        <p class="text-sm text-text-medium">Forget it, I'll just dispute the charge with my bank. This is ridiculous.</p>
+                        <p class="text-xs text-error font-medium mt-1.5">Call ended - Intent: request_escalation - Zendesk update failed (422)</p>
                     </div>
                 </div>
             </div>
@@ -321,13 +321,13 @@
         <div class="bg-white rounded-xl border border-border shadow-sm p-6 mb-6">
             <h3 class="text-sm font-semibold text-text-dark mb-4">Entities & keywords</h3>
             <div class="flex flex-wrap gap-2">
-                <span class="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-medium">appointment</span>
-                <span class="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-medium">Tuesday</span>
-                <span class="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-medium">2 PM</span>
-                <span class="px-2.5 py-1 rounded-lg bg-amber-50 text-warning text-xs font-medium">call back later</span>
-                <span class="px-2.5 py-1 rounded-lg bg-amber-50 text-warning text-xs font-medium">reconsider</span>
-                <span class="px-2.5 py-1 rounded-lg bg-red-50 text-error text-xs font-medium">schedule</span>
-                <span class="px-2.5 py-1 rounded-lg bg-red-50 text-error text-xs font-medium">cancel (implied)</span>
+                <span class="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-medium">refund</span>
+                <span class="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-medium">order #4821</span>
+                <span class="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-medium">3-5 business days</span>
+                <span class="px-2.5 py-1 rounded-lg bg-amber-50 text-warning text-xs font-medium">speak to a person</span>
+                <span class="px-2.5 py-1 rounded-lg bg-amber-50 text-warning text-xs font-medium">frustration</span>
+                <span class="px-2.5 py-1 rounded-lg bg-red-50 text-error text-xs font-medium">dispute</span>
+                <span class="px-2.5 py-1 rounded-lg bg-red-50 text-error text-xs font-medium">escalation (implied)</span>
             </div>
         </div>
 
@@ -336,7 +336,7 @@
                 <svg class="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 <p class="text-sm font-semibold text-text-dark">Validated on previous production calls</p>
             </div>
-            <p class="text-sm text-text-medium">This recovery policy was trained on <span class="font-semibold">5,280 prior production calls</span> and achieved <span class="font-semibold text-success">93.4% success rate</span> on defer/cancel paths with <span class="font-semibold text-success">98.1% CRM write success</span>.</p>
+            <p class="text-sm text-text-medium">This recovery policy was trained on <span class="font-semibold">5,280 prior production calls</span> and achieved <span class="font-semibold text-success">93.4% success rate</span> on defer/escalation paths with <span class="font-semibold text-success">98.1% ticket system write success</span>.</p>
         </div>
 
         <!-- View generated variants -->

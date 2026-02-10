@@ -48,14 +48,14 @@
             <ul class="space-y-1.5 text-sm text-text-dark">
                 <li id="change-step-1">Clarify defer vs cancel intent with explicit confirmation.</li>
                 <li id="change-step-2">Add safe close response to reduce abrupt call endings.</li>
-                <li id="change-step-3">Create verified HubSpot activity with retry/fallback before handoff.</li>
+                <li id="change-step-3">Create verified Zendesk activity with retry/fallback before handoff.</li>
             </ul>
             <p id="change-status" class="text-xs text-text-light mt-3">Initializing update plan...</p>
         </div>
 
         <div class="bg-emerald-50 border border-emerald-100 rounded-lg p-4 mb-5">
             <div class="flex items-center justify-between mb-2">
-                <p class="text-xs uppercase tracking-wider text-emerald-700 font-semibold">HubSpot delivery</p>
+                <p class="text-xs uppercase tracking-wider text-emerald-700 font-semibold">Zendesk delivery</p>
                 <span id="hubspot-pill" class="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-text-light">Pending</span>
             </div>
             <div class="space-y-1.5 text-sm text-text-dark">
@@ -135,7 +135,7 @@
 
                 if (value < 34) setActiveStep(0, 'Updating intent clarification prompts...');
                 else if (value < 68) setActiveStep(1, 'Applying close-loop response changes...');
-                else if (value < 100) setActiveStep(2, 'Finalizing CRM retry + fallback policy...');
+                else if (value < 100) setActiveStep(2, 'Finalizing ticket system retry + fallback policy...');
                 else changeStatus.textContent = 'Update complete. Opening results...';
 
                 if (t < 1) requestAnimationFrame(update);

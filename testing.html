@@ -222,7 +222,7 @@
             <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-border">
                 <div class="w-2 h-2 bg-success rounded-full animate-pulse"></div>
                 <span class="text-sm text-text-light">Voice Bot:</span>
-                <span class="text-sm font-medium text-text-dark">SalesBot</span>
+                <span class="text-sm font-medium text-text-dark">ServiceBot</span>
             </div>
             <div class="flex items-center gap-6">
                 <a href="settings.html" class="flex items-center gap-2 text-text-medium hover:text-text-dark transition-colors">
@@ -294,19 +294,19 @@
                     Back to Call breakdown - Run #47
                 </a>
                 <h1 class="text-2xl font-bold text-text-dark mb-2">Generated variants for this failure pattern</h1>
-                <p class="text-text-light">These responses are generated from the exact breakdown in Run #47 (defer - hallucinated slot context - cancel - CRM 422). Pick one and deploy with staged safety checks.</p>
+                <p class="text-text-light">These responses are generated from the exact breakdown in Run #47 (defer - hallucinated slot context - escalation - ticket system 422). Pick one and deploy with staged safety checks.</p>
             </div>
 
             <div class="grid md:grid-cols-3 gap-4 mb-6">
                 <div class="bg-red-50 border border-red-200 rounded-xl p-4">
                     <p class="text-xs uppercase tracking-wider text-error font-semibold mb-1">Observed Failure</p>
-                    <p class="text-sm text-text-dark font-medium">No clear cancel path + hallucinated slot status + Hubspot sync failed</p>
+                    <p class="text-sm text-text-dark font-medium">No clear escalation path + hallucinated ticket status + Zendesk sync failed</p>
                     <p class="text-xs text-text-light mt-1">Customer intent changed, bot kept stale context and did not close state safely.</p>
                 </div>
                 <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <p class="text-xs uppercase tracking-wider text-primary font-semibold mb-1">Generated Fix Goal</p>
                     <p class="text-sm text-text-dark font-medium">Resolve defer vs cancel with context grounding</p>
-                    <p class="text-xs text-text-light mt-1">Every variant re-reads live intent + slot context before replying, then confirms CRM update in natural language.</p>
+                    <p class="text-xs text-text-light mt-1">Every variant re-reads live intent + slot context before replying, then confirms ticket update in natural language.</p>
                 </div>
                 <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
                     <p class="text-xs uppercase tracking-wider text-warning font-semibold mb-1">Deployment Mode</p>
@@ -320,7 +320,7 @@
                     <svg class="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                     <p class="text-sm font-semibold text-text-dark">Validated on previous production calls</p>
                 </div>
-                <p class="text-sm text-text-medium">Model family benchmark: <span class="font-semibold">5,280 prior production calls</span>, <span class="font-semibold text-success">93.4% success rate</span> on defer/cancel recovery flows, <span class="font-semibold text-success">98.1% CRM write success</span> with retry enabled.</p>
+                <p class="text-sm text-text-medium">Model family benchmark: <span class="font-semibold">5,280 prior production calls</span>, <span class="font-semibold text-success">93.4% success rate</span> on defer/cancel recovery flows, <span class="font-semibold text-success">98.1% ticket write success</span> with retry enabled.</p>
                 <p class="text-xs text-text-light mt-1">These candidates are adapted from that trained baseline to this specific failure path.</p>
             </div>
 
@@ -328,7 +328,7 @@
                 <h2 class="text-base font-semibold text-text-dark mb-2">How variants are scored</h2>
                 <div class="grid md:grid-cols-4 gap-3 text-sm">
                     <div class="bg-gray-50 rounded-lg p-3 border border-border"><p class="text-xs text-text-light uppercase mb-1">Task completion</p><p class="font-semibold text-text-dark">40%</p></div>
-                    <div class="bg-gray-50 rounded-lg p-3 border border-border"><p class="text-xs text-text-light uppercase mb-1">CRM success</p><p class="font-semibold text-text-dark">25%</p></div>
+                    <div class="bg-gray-50 rounded-lg p-3 border border-border"><p class="text-xs text-text-light uppercase mb-1">Ticket sync</p><p class="font-semibold text-text-dark">25%</p></div>
                     <div class="bg-gray-50 rounded-lg p-3 border border-border"><p class="text-xs text-text-light uppercase mb-1">Sentiment recovery</p><p class="font-semibold text-text-dark">20%</p></div>
                     <div class="bg-gray-50 rounded-lg p-3 border border-border"><p class="text-xs text-text-light uppercase mb-1">Context grounding</p><p class="font-semibold text-text-dark">15%</p></div>
                 </div>
@@ -345,7 +345,7 @@
                         <div class="text-right flex-shrink-0" style="width: 220px;">
                             <div class="mb-2"><span class="text-3xl font-bold text-text-dark">58%</span><span class="text-sm font-semibold text-error ml-1">(baseline)</span></div>
                             <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-2"><div class="progress-fill h-full bg-gray-400 rounded-full" style="width: 0%" data-target="58"></div></div>
-                            <p class="text-xs text-text-light">Fails cancel + CRM guardrails</p>
+                            <p class="text-xs text-text-light">Fails escalation + ticket guardrails</p>
                         </div>
                     </div>
                 </div>
@@ -356,7 +356,7 @@
                         <div class="flex-1 min-w-0 pr-24">
                             <h3 class="text-lg font-semibold text-text-dark mb-2 flex items-center gap-2"><span>Variant B: Hold slot + explicit cancel option</span><span class="text-warning text-xl">*</span></h3>
                             <p class="text-sm text-text-medium mb-2">"I can hold your Tuesday 2 PM slot for 24 hours, or cancel now and update your record immediately."</p>
-                            <p class="text-xs text-success font-medium">Best blend of customer clarity, cancellation handling, and CRM consistency.</p>
+                            <p class="text-xs text-success font-medium">Best blend of customer clarity, escalation handling, and ticket consistency.</p>
                         </div>
                         <div class="text-right flex-shrink-0" style="width: 220px; margin-top: 4px;">
                             <div class="mb-2"><span class="text-3xl font-bold text-text-dark">89%</span><span class="text-sm font-semibold text-success ml-1">(+31%)</span></div>
@@ -370,7 +370,7 @@
                     <div class="flex items-start justify-between gap-6">
                         <div class="flex-1 min-w-0">
                             <h3 class="text-lg font-semibold text-text-dark mb-2">Variant C: Explicit cancellation confirmation</h3>
-                            <p class="text-sm text-text-medium mb-2">"Got it - I have canceled this appointment and updated our system."</p>
+                            <p class="text-sm text-text-medium mb-2">"Got it - I have escalated your issue to a specialist and updated your ticket."</p>
                             <p class="text-xs text-text-light">Strong for direct cancel requests and operational clarity.</p>
                         </div>
                         <div class="text-right flex-shrink-0" style="width: 220px;">
@@ -401,7 +401,7 @@
                         <div class="flex-1 min-w-0">
                             <h3 class="text-lg font-semibold text-text-dark mb-2">Variant E: Cancellation + retry assurance</h3>
                             <p class="text-sm text-text-medium mb-2">"I have noted this cancellation. If the system update fails, we will follow up within one hour."</p>
-                            <p class="text-xs text-text-light">Best when CRM outages are likely; reduces silent failure risk.</p>
+                            <p class="text-xs text-text-light">Best when ticket system outages are likely; reduces silent failure risk.</p>
                         </div>
                         <div class="text-right flex-shrink-0" style="width: 220px;">
                             <div class="mb-2"><span class="text-3xl font-bold text-text-dark">84%</span><span class="text-sm font-semibold text-success ml-1">(+26%)</span></div>

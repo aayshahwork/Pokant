@@ -169,7 +169,7 @@
             <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-border">
                 <div class="w-2 h-2 bg-success rounded-full animate-pulse"></div>
                 <span class="text-sm text-text-light">Voice Bot:</span>
-                <span class="text-sm font-medium text-text-dark">SalesBot</span>
+                <span class="text-sm font-medium text-text-dark">ServiceBot</span>
             </div>
             <div class="flex items-center gap-6">
                 <a href="settings.html" class="flex items-center gap-2 text-text-medium hover:text-text-dark transition-colors">
@@ -236,8 +236,8 @@
     <main class="main-content p-8">
         <section class="page-header header-row" aria-label="Dashboard overview">
             <div>
-                <h1 class="text-2xl font-bold text-text-dark mb-1">SalesBot Operations Dashboard</h1>
-                <p class="text-text-light">Monitor recovery performance, HubSpot reliability, and rollout health in one place.</p>
+                <h1 class="text-2xl font-bold text-text-dark mb-1">ServiceBot Operations Dashboard</h1>
+                <p class="text-text-light">Monitor resolution performance, ticket sync reliability, and rollout health in one place.</p>
             </div>
             <a href="testing.html" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-blue-600 text-white font-medium rounded-lg transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -251,16 +251,16 @@
             <div class="bg-green-50 border border-green-200 rounded-xl p-4">
                 <p class="text-xs uppercase tracking-wider text-success font-semibold mb-1">Rollout status</p>
                 <p class="text-sm font-semibold text-text-dark">Variant B active at 50% traffic</p>
-                <p class="text-xs text-text-light mt-1">Auto-rollback enabled if CRM sync drops below 97.5%</p>
+                <p class="text-xs text-text-light mt-1">Auto-rollback enabled if ticket sync drops below 97.5%</p>
             </div>
             <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <p class="text-xs uppercase tracking-wider text-primary font-semibold mb-1">HubSpot sync health</p>
+                <p class="text-xs uppercase tracking-wider text-primary font-semibold mb-1">Zendesk sync health</p>
                 <p class="text-sm font-semibold text-text-dark">Healthy - 98.1% write success</p>
-                <p class="text-xs text-text-light mt-1">Median timeline visibility lag: 11s</p>
+                <p class="text-xs text-text-light mt-1">Median ticket update lag: 11s</p>
             </div>
             <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <p class="text-xs uppercase tracking-wider text-warning font-semibold mb-1">Current focus</p>
-                <p class="text-sm font-semibold text-text-dark">Defer/cancel recovery path</p>
+                <p class="text-sm font-semibold text-text-dark">Escalation/handoff recovery path</p>
                 <p class="text-xs text-text-light mt-1">Largest impact pattern from recent failures</p>
             </div>
         </div>
@@ -274,7 +274,7 @@
                         <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
                         </svg>
-                        <span class="text-sm text-text-light">Current Recovery Success</span>
+                        <span class="text-sm text-text-light">Current Resolution Success</span>
                     </div>
                     <span class="px-3 py-1 text-xs font-medium text-success bg-green-50 rounded-full">+20.1% Lift</span>
                 </div>
@@ -300,14 +300,14 @@
                 <p class="text-sm text-text-light">Control arm from Run #47</p>
             </div>
 
-            <!-- HubSpot Card -->
+            <!-- Zendesk Card -->
             <div class="kpi-card bg-white rounded-xl border border-border shadow-sm p-6 relative">
                 <div class="flex items-start justify-between mb-4">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                         </svg>
-                        <span class="text-sm text-text-light">HubSpot Write Success</span>
+                        <span class="text-sm text-text-light">Zendesk Write Success</span>
                     </div>
                     <span class="px-3 py-1 text-xs font-medium text-success bg-green-50 rounded-full">Healthy</span>
                 </div>
@@ -324,18 +324,18 @@
                     <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
                     </svg>
-                    <span class="text-sm text-text-light">Validated Call Volume</span>
+                    <span class="text-sm text-text-light">Validated Support Volume</span>
                 </div>
                 <div class="mb-2">
                     <span class="text-5xl font-bold text-text-dark">5,280</span>
                 </div>
-                <p class="text-sm text-text-light">Prior production calls in this model family</p>
+                <p class="text-sm text-text-light">Prior support calls in this model family</p>
             </div>
         </div>
 
         <!-- Chart Section -->
         <div class="panel bg-white rounded-xl border border-border shadow-sm p-6 mb-8">
-            <h2 class="text-lg font-semibold text-text-dark mb-6">Recovery Success Trend (Last 4 Weeks)</h2>
+            <h2 class="text-lg font-semibold text-text-dark mb-6">Resolution Success Trend (Last 4 Weeks)</h2>
             <div id="dashboard-chart-loading" class="chart-loading state-block">
                 <div class="skeleton-chart"></div>
             </div>
@@ -344,7 +344,7 @@
             </div>
             <div id="dashboard-chart-empty" class="chart-empty state-block hidden">
                 <p class="state-empty-title">No trend data yet</p>
-                <p class="state-empty-copy">Run additional calls to populate weekly success-rate history.</p>
+                <p class="state-empty-copy">Run additional support calls to populate weekly resolution-rate history.</p>
             </div>
             <div id="dashboard-chart-error" class="chart-error state-block state-error hidden">
                 <p class="state-error-title">Chart unavailable</p>
@@ -355,7 +355,7 @@
         <!-- Failure Pattern Section -->
         <div class="bg-white rounded-xl border border-border shadow-sm p-6">
             <div class="flex items-start justify-between mb-4">
-                <h2 class="text-lg font-semibold text-text-dark">Customer Changes Mind Mid-Conversation</h2>
+                <h2 class="text-lg font-semibold text-text-dark">Customer Requests Escalation Mid-Conversation</h2>
                 <span class="px-3 py-1 text-xs font-medium text-error">Critical Pattern</span>
             </div>
 
@@ -389,11 +389,11 @@
                         </div>
                         <div>
                             <p class="text-xs font-medium text-text-dark mb-1">Bot</p>
-                            <p class="text-sm text-text-medium">Great! I've confirmed your appointment for next Tuesday at 2 PM. Can I help you with anything else today?</p>
+                            <p class="text-sm text-text-medium">I've submitted a refund request for your order #4821. You should see it reflected within 3-5 business days. Is there anything else I can help with?</p>
                         </div>
                     </div>
 
-                    <!-- Patient Message -->
+                    <!-- Customer Message -->
                     <div class="flex gap-3">
                         <div class="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
                             <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -401,8 +401,8 @@
                             </svg>
                         </div>
                         <div>
-                            <p class="text-xs font-medium text-text-dark mb-1">Patient</p>
-                            <p class="text-sm text-text-medium">Actually, you know what, let me think about this and call back later.</p>
+                            <p class="text-xs font-medium text-text-dark mb-1">Customer</p>
+                            <p class="text-sm text-text-medium">Actually, this isn't what I asked for. I want to speak to a real person about this.</p>
                         </div>
                     </div>
 
@@ -415,11 +415,11 @@
                         </div>
                         <div>
                             <p class="text-xs font-medium text-text-dark mb-1">Bot</p>
-                            <p class="text-sm text-text-medium">Of course! Is there anything specific you'd like to reconsider?</p>
+                            <p class="text-sm text-text-medium">I understand your frustration. Let me see if I can connect you with a support agent right away.</p>
                         </div>
                     </div>
 
-                    <!-- Patient Message with End Indicator -->
+                    <!-- Customer Message with End Indicator -->
                     <div class="flex gap-3">
                         <div class="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0">
                             <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -427,11 +427,11 @@
                             </svg>
                         </div>
                         <div>
-                            <p class="text-xs font-medium text-text-dark mb-1">Patient</p>
-                            <p class="text-sm text-text-medium">No, I just need to check my schedule again. Thanks.</p>
+                            <p class="text-xs font-medium text-text-dark mb-1">Customer</p>
+                            <p class="text-sm text-text-medium">Forget it, I'll just dispute the charge with my bank. This is ridiculous.</p>
                             <div class="flex items-center gap-1.5 mt-2">
                                 <div class="w-2 h-2 rounded-full bg-error"></div>
-                                <span class="text-xs text-error font-medium">Call ended - Appointment cancelled</span>
+                                <span class="text-xs text-error font-medium">Call ended - Escalation failed, ticket unresolved</span>
                             </div>
                         </div>
                     </div>
@@ -477,7 +477,7 @@
             data: {
                 labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
                 datasets: [{
-                    label: 'Success Rate',
+                    label: 'Resolution Rate',
                     data: [64.0, 71.8, 79.6, 84.1],
                     borderColor: '#3B82F6',
                     backgroundColor: gradient,
