@@ -112,11 +112,11 @@
                 <p class="text-text-light">Control vs Variant B on Customer Requests Escalation recovery flow.</p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="kpi-cards">
                 <div class="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-sky-100 p-4">
                     <p class="text-xs uppercase tracking-wider text-primary font-semibold mb-1">Traffic split</p>
-                    <p class="font-mono text-2xl font-bold text-text-dark">50/50</p>
-                    <p class="text-xs text-text-light mt-1">1,000 calls each arm</p>
+                    <p id="kpi-split" class="font-mono text-2xl font-bold text-text-dark">50/50</p>
+                    <p id="kpi-split-detail" class="text-xs text-text-light mt-1">1,000 calls each arm</p>
                 </div>
                 <div class="rounded-xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-100 p-4">
                     <p class="text-xs uppercase tracking-wider text-success font-semibold mb-1">Winning lift</p>
@@ -125,13 +125,13 @@
                 </div>
                 <div class="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-100 p-4">
                     <p class="text-xs uppercase tracking-wider text-violet-700 font-semibold mb-1">Confidence</p>
-                    <p class="font-mono text-2xl font-bold text-text-dark">98%</p>
+                    <p id="kpi-confidence" class="font-mono text-2xl font-bold text-text-dark">98%</p>
                     <p class="text-xs text-text-light mt-1">Statistical significance</p>
                 </div>
                 <div class="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-100 p-4">
-                    <p class="text-xs uppercase tracking-wider text-warning font-semibold mb-1">ticket system write success</p>
-                    <p class="font-mono text-2xl font-bold text-text-dark">98.1%</p>
-                    <p class="text-xs text-text-light mt-1">With retry policy enabled</p>
+                    <p class="text-xs uppercase tracking-wider text-warning font-semibold mb-1">Days running</p>
+                    <p id="kpi-days" class="font-mono text-2xl font-bold text-text-dark">--</p>
+                    <p id="kpi-status" class="text-xs text-text-light mt-1">Test status</p>
                 </div>
             </div>
 
@@ -259,15 +259,20 @@
                 </div>
             </div>
 
-            <div class="flex items-center gap-4 flex-wrap">
+            <div id="action-buttons" class="flex items-center gap-4 flex-wrap">
                 <a href="testing.html" class="px-6 py-3 border border-border rounded-lg text-text-medium hover:bg-gray-50 transition-colors text-sm font-medium">Compare variants again</a>
-                <a href="dashboard.html" class="inline-flex items-center gap-2 px-6 py-3 bg-primary hover:bg-blue-600 text-white font-medium rounded-lg transition-colors">
-                    Deploy winning variant
-                </a>
+                <button id="promote-btn" onclick="promoteWinner()" class="inline-flex items-center gap-2 px-6 py-3 bg-success hover:bg-emerald-600 text-white font-medium rounded-lg transition-colors">
+                    Promote winning variant
+                </button>
+                <button id="cancel-btn" onclick="cancelTest()" class="px-6 py-3 border border-error/30 text-error hover:bg-red-50 rounded-lg transition-colors text-sm font-medium">
+                    Cancel test
+                </button>
             </div>
+            <p id="auto-refresh-label" class="text-xs text-text-light mt-3 hidden">Auto-refreshing every 30 seconds...</p>
         </div>
     </main>
 
+    <script src="scripts/api-client.js"></script>
     <script>
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('collapsed');
@@ -290,6 +295,127 @@
             });
         }
 
+        const params = new URLSearchParams(window.location.search);
+        const testId = params.get('test_id');
+        let refreshInterval = null;
+
+        async function loadTestResults() {
+            if (!testId) return; // no test_id, keep hardcoded demo data
+
+            try {
+                const data = await api.getTestResults(testId);
+
+                // Update KPI cards
+                const split = data.traffic_split || 50;
+                document.getElementById('kpi-split').textContent = `${split}/${100 - split}`;
+                document.getElementById('kpi-split-detail').textContent =
+                    `${data.control?.calls || 0} vs ${data.variant?.calls || 0} calls`;
+
+                // Lift
+                const ctrl = data.control || {};
+                const vari = data.variant || {};
+                const ctrlRate = ctrl.success_rate || 0;
+                const varRate = vari.success_rate || 0;
+                const lift = varRate - ctrlRate;
+                document.getElementById('lift-value').textContent = lift.toFixed(1) + '%';
+                document.getElementById('lift-value').className =
+                    `font-mono text-2xl font-bold ${lift > 0 ? 'text-success' : 'text-error'}`;
+
+                // Confidence
+                const stats = data.statistical_analysis || {};
+                const confidence = stats.confidence_level || '--';
+                document.getElementById('kpi-confidence').textContent =
+                    typeof confidence === 'number' ? confidence + '%' : confidence;
+
+                // Days running / status
+                document.getElementById('kpi-days').textContent = data.days_running || '--';
+                document.getElementById('kpi-status').textContent = data.status || 'running';
+
+                // Control & Variant rates
+                const controlEl = document.getElementById('control-rate');
+                const variantEl = document.getElementById('variant-rate');
+                if (controlEl) controlEl.textContent = ctrlRate.toFixed(1);
+                if (variantEl) variantEl.textContent = varRate.toFixed(1);
+
+                // Update call counts
+                const controlCalls = document.querySelector('#control-rate')?.closest('.p-6');
+                if (controlCalls) {
+                    const mono = controlCalls.querySelector('.font-mono:last-child');
+                    if (mono) mono.textContent = `${ctrl.successes || 0} / ${ctrl.calls || 0} calls`;
+                }
+                const variantCalls = document.querySelector('#variant-rate')?.closest('.p-6');
+                if (variantCalls) {
+                    const mono = variantCalls.querySelector('.font-mono:last-child');
+                    if (mono) mono.textContent = `${vari.successes || 0} / ${vari.calls || 0} calls`;
+                }
+
+                // Revenue impact
+                const impact = data.projected_impact;
+                if (impact) {
+                    const revenueEl = document.querySelector('.font-mono.font-bold.text-success');
+                    if (revenueEl && impact.annual_revenue_impact != null) {
+                        revenueEl.textContent = `+$${Math.round(impact.annual_revenue_impact).toLocaleString()}`;
+                    }
+                }
+
+                // Winner badge
+                if (stats.is_significant && lift > 0) {
+                    document.getElementById('promote-btn').classList.remove('hidden');
+                } else if (data.status === 'completed' || data.status === 'promoted') {
+                    document.getElementById('promote-btn').classList.add('hidden');
+                    document.getElementById('cancel-btn').classList.add('hidden');
+                }
+
+                // Auto-refresh for running tests
+                if (data.status === 'running' && !refreshInterval) {
+                    document.getElementById('auto-refresh-label').classList.remove('hidden');
+                    refreshInterval = setInterval(loadTestResults, 30000);
+                } else if (data.status !== 'running' && refreshInterval) {
+                    clearInterval(refreshInterval);
+                    refreshInterval = null;
+                    document.getElementById('auto-refresh-label').classList.add('hidden');
+                }
+
+            } catch (e) {
+                console.warn('Failed to load test results:', e.message);
+            }
+        }
+
+        async function promoteWinner() {
+            if (!testId) return;
+            const btn = document.getElementById('promote-btn');
+            btn.disabled = true;
+            btn.textContent = 'Promoting...';
+            try {
+                await api.promoteVariant(testId);
+                showSuccessBanner('Variant promoted to 100% traffic!');
+                btn.textContent = 'Promoted';
+                document.getElementById('cancel-btn').classList.add('hidden');
+                if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+                document.getElementById('auto-refresh-label').classList.add('hidden');
+            } catch (e) {
+                showErrorBanner('Failed to promote: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = 'Promote winning variant';
+            }
+        }
+
+        async function cancelTest() {
+            if (!testId) return;
+            if (!confirm('Cancel this A/B test? The variant assistant will be removed.')) return;
+            try {
+                await api.cancelTest(testId);
+                showSuccessBanner('Test cancelled.');
+                document.getElementById('promote-btn').classList.add('hidden');
+                document.getElementById('cancel-btn').classList.add('hidden');
+                if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+                document.getElementById('auto-refresh-label').classList.add('hidden');
+            } catch (e) {
+                showErrorBanner('Failed to cancel: ' + e.message);
+            }
+        }
+
+        // Initial animations
         gsap.from('nav', { opacity: 0, y: -8, duration: 0.4, ease: 'power2.out' });
         gsap.from('main h1', { opacity: 0, y: 12, duration: 0.4, delay: 0.1, ease: 'power2.out' });
         gsap.from('.grid > div', { opacity: 0, y: 16, duration: 0.4, stagger: 0.08, delay: 0.2, ease: 'power2.out' });
@@ -298,6 +424,9 @@
             animateNumber(document.getElementById('variant-rate'), 84.1, { duration: 1.2, decimals: 1 });
             animateNumber(document.getElementById('lift-value'), 20.1, { duration: 1.2, decimals: 1 });
         }, 450);
+
+        // Load real data if test_id is present
+        document.addEventListener('DOMContentLoaded', loadTestResults);
     </script>
 </body>
 </html>

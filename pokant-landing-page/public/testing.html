@@ -427,6 +427,7 @@
         </div>
     </main>
 
+    <script src="scripts/api-client.js"></script>
     <script src="scripts/shared-copy.js"></script>
     <script>window.applyPokantSharedCopy && window.applyPokantSharedCopy();</script>
     <script>
@@ -437,22 +438,22 @@
 
         // Track selected variant
         let selectedVariant = null;
+        let selectedVariantId = null;
+        const params = new URLSearchParams(window.location.search);
+        const patternId = params.get('pattern_id');
 
         // Select variant
-        function selectVariant(variantLetter) {
-            // Remove selected class from all cards
+        function selectVariant(variantLetter, variantId) {
             document.querySelectorAll('.variant-card').forEach(card => {
                 card.classList.remove('selected');
             });
 
-            // Add selected class to clicked card
             const selectedCard = document.querySelector(`[data-variant="${variantLetter}"]`);
             selectedCard.classList.add('selected');
 
-            // Update selected variant
             selectedVariant = variantLetter;
+            selectedVariantId = variantId || null;
 
-            // Update and show deploy button
             const deployBtn = document.getElementById('deployBtn');
             const deployBtnText = document.getElementById('deployBtnText');
             deployBtnText.textContent = `Deploy Variant ${variantLetter}`;
@@ -460,8 +461,8 @@
             deployBtn.classList.add('visible-btn');
         }
 
-        // Deploy variant
-        function deployVariant() {
+        // Deploy variant via API
+        async function deployVariant() {
             if (!selectedVariant) return;
 
             const deployBtn = document.getElementById('deployBtn');
@@ -473,14 +474,91 @@
             deployBtnText.textContent = 'Deploying...';
             deploySpinner.classList.remove('hidden');
 
-            // Go to setup (analyzing) then setup redirects to results.html after progress bar
+            // If we have real IDs, deploy via API
+            if (selectedVariantId && patternId && api.customerId) {
+                try {
+                    const result = await api.deployTest({
+                        customer_id: api.customerId,
+                        pattern_id: patternId,
+                        variant_id: selectedVariantId,
+                        traffic_split: 20,
+                    });
+                    window.location.href = `results.html?test_id=${result.test_id}`;
+                    return;
+                } catch (e) {
+                    console.warn('API deploy failed, falling back to demo flow:', e.message);
+                    // Reset button and fall through to demo flow
+                }
+            }
+
+            // Demo fallback: go to setup page
             setTimeout(() => {
                 window.location.href = 'setup.html';
             }, 800);
         }
 
+        // Load variants from API
+        async function loadVariants() {
+            if (!patternId) return; // no pattern_id param, keep hardcoded demo data
+
+            try {
+                const variants = await api.getVariants(patternId);
+                if (!variants || !variants.length) return;
+
+                const container = document.getElementById('variantCards');
+                container.innerHTML = '';
+
+                variants.forEach((v, i) => {
+                    const letter = v.letter || String.fromCharCode(65 + i);
+                    const isRecommended = v.recommended;
+                    const isBaseline = v.is_control;
+                    const score = v.success_rate != null ? Math.round(v.success_rate) : 0;
+                    const delta = v.improvement_delta != null ? v.improvement_delta : 0;
+                    const deltaSign = delta > 0 ? '+' : '';
+                    const barColor = isBaseline ? 'bg-gray-400' : (delta > 0 ? 'bg-success' : 'bg-error');
+                    const deltaColor = isBaseline ? 'text-error' : (delta > 0 ? 'text-success' : 'text-error');
+                    const deltaLabel = isBaseline ? '(baseline)' : `(${deltaSign}${delta}%)`;
+
+                    const card = document.createElement('div');
+                    card.className = `variant-card${isRecommended ? ' relative border-2 border-primary/30' : ''}`;
+                    card.setAttribute('data-variant', letter);
+                    card.onclick = () => selectVariant(letter, v.id);
+
+                    card.innerHTML = `
+                        ${isRecommended ? '<div class="absolute top-4 right-4"><span class="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-full">RECOMMENDED</span></div>' : ''}
+                        <div class="flex items-start justify-between gap-6">
+                            <div class="flex-1 min-w-0${isRecommended ? ' pr-24' : ''}">
+                                <h3 class="text-lg font-semibold text-text-dark mb-2">Variant ${letter}${isBaseline ? ' <span class="text-xs font-normal text-text-light">(current behavior)</span>' : ''}</h3>
+                                <p class="text-sm text-text-medium mb-2 line-clamp-2">${v.prompt_text || ''}</p>
+                                ${isRecommended ? '<p class="text-xs text-success font-medium">Top-scoring variant in simulation.</p>' : ''}
+                            </div>
+                            <div class="text-right flex-shrink-0" style="width: 220px;">
+                                <div class="mb-2"><span class="text-3xl font-bold text-text-dark">${score}%</span><span class="text-sm font-semibold ${deltaColor} ml-1">${deltaLabel}</span></div>
+                                <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-2"><div class="progress-fill h-full ${barColor} rounded-full" style="width: 0%" data-target="${score}"></div></div>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+
+                // Animate progress bars
+                setTimeout(() => {
+                    container.querySelectorAll('.progress-fill').forEach((bar, index) => {
+                        const target = bar.getAttribute('data-target');
+                        setTimeout(() => { bar.style.width = target + '%'; }, 100 + (index * 100));
+                    });
+                }, 50);
+
+            } catch (e) {
+                console.warn('Failed to load variants from API:', e.message);
+                // Keep hardcoded demo data
+            }
+        }
+
         // Animate progress bars on page load
         document.addEventListener('DOMContentLoaded', () => {
+            loadVariants();
+
             const progressBars = document.querySelectorAll('.progress-fill');
             progressBars.forEach((bar, index) => {
                 const target = bar.getAttribute('data-target');

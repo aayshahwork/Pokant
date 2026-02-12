@@ -6,6 +6,8 @@
     "build": "pnpm --filter ./pokant-landing-page build",
     "build:cloudflare": "bash scripts/build-cloudflare-pages.sh",
     "start": "pnpm --filter ./pokant-landing-page start",
-    "install:all": "pnpm --filter ./pokant-landing-page install"
+    "install:all": "pnpm --filter ./pokant-landing-page install",
+    "backend:install": "cd pokant-backend && pip install -r requirements.txt",
+    "backend:dev": "cd pokant-backend && uvicorn app.main:app --reload --port 8000"
   }
 }

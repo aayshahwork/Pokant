@@ -268,7 +268,7 @@
         <!-- KPI Cards Row -->
         <div class="kpi-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
             <!-- Recovery Success Card -->
-            <div class="kpi-card kpi-primary bg-white rounded-xl border border-border shadow-sm p-6 relative">
+            <div class="kpi-card kpi-primary bg-white rounded-xl border border-border shadow-sm p-6 relative" data-metric="success-rate">
                 <div class="flex items-start justify-between mb-4">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -286,7 +286,7 @@
             </div>
 
             <!-- Baseline Card -->
-            <div class="kpi-card bg-white rounded-xl border border-border shadow-sm p-6 relative">
+            <div class="kpi-card bg-white rounded-xl border border-border shadow-sm p-6 relative" data-metric="baseline">
                 <div class="flex items-center gap-2 mb-4">
                     <svg class="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
@@ -319,7 +319,7 @@
             </div>
 
             <!-- Validation Volume Card -->
-            <div class="kpi-card bg-white rounded-xl border border-border shadow-sm p-6 relative">
+            <div class="kpi-card bg-white rounded-xl border border-border shadow-sm p-6 relative" data-metric="total-calls">
                 <div class="flex items-center gap-2 mb-4">
                     <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
@@ -446,7 +446,7 @@
                     </svg>
                     <span class="text-sm font-medium">Play Call Recording</span>
                 </button>
-                <a href="testing.html" class="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-blue-600 rounded-lg text-white transition-colors">
+                <a id="fix-pattern-link" href="testing.html" class="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-blue-600 rounded-lg text-white transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -457,6 +457,52 @@
         </div>
     </main>
 
+    <script src="scripts/api-client.js"></script>
+    <script>
+        // ── API Integration ──────────────────────────────────────
+        (async function loadDashboardData() {
+            try {
+                const [dashboard, patterns] = await Promise.all([
+                    api.getDashboard().catch(() => null),
+                    api.getPatterns().catch(() => null),
+                ]);
+
+                if (dashboard) {
+                    // Update success rate card
+                    const srCard = document.querySelector('[data-metric="success-rate"]');
+                    if (srCard) {
+                        const valueEl = srCard.querySelector('.text-5xl');
+                        if (valueEl) valueEl.textContent = dashboard.success_rate.toFixed(1);
+                    }
+
+                    // Update total calls card
+                    const tcCard = document.querySelector('[data-metric="total-calls"]');
+                    if (tcCard) {
+                        const valueEl = tcCard.querySelector('.text-5xl');
+                        if (valueEl) valueEl.textContent = dashboard.total_calls.toLocaleString();
+                    }
+
+                    // Update chart if trend data available
+                    if (dashboard.trend_data && dashboard.trend_data.length && window._pokantChart) {
+                        window._pokantChart.data.labels = dashboard.trend_data.map(d => d.date);
+                        window._pokantChart.data.datasets[0].data = dashboard.trend_data.map(d => d.success_rate);
+                        window._pokantChart.update();
+                    }
+                }
+
+                if (patterns && patterns.length) {
+                    // Update "Fix This Pattern" link with real pattern ID
+                    const fixLink = document.getElementById('fix-pattern-link');
+                    if (fixLink && patterns[0].id) {
+                        fixLink.href = `testing.html?pattern_id=${patterns[0].id}`;
+                    }
+                }
+            } catch (e) {
+                // Silently fall back to hardcoded data
+                console.log('Using demo data:', e.message);
+            }
+        })();
+    </script>
     <script>
         // Sidebar toggle
         function toggleSidebar() {
@@ -472,7 +518,7 @@
             gradient.addColorStop(0, 'rgba(59, 130, 246, 0.1)');
             gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
 
-            new Chart(ctx, {
+            window._pokantChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],

@@ -122,6 +122,11 @@
             }
         }
 
+        // Pass test_id through to results page if present
+        const params = new URLSearchParams(window.location.search);
+        const testId = params.get('test_id');
+        const resultsUrl = testId ? `results.html?test_id=${testId}` : 'results.html';
+
         function animateProgressBar(element, endPercent, durationMs, labelEl, suffix) {
             const startTime = performance.now();
             function update(currentTime) {
@@ -139,7 +144,7 @@
                 else changeStatus.textContent = 'Update complete. Opening results...';
 
                 if (t < 1) requestAnimationFrame(update);
-                else window.location.href = 'results.html';
+                else window.location.href = resultsUrl;
             }
             requestAnimationFrame(update);
         }

@@ -1,0 +1,30 @@
+"""
+Celery configuration for background jobs.
+
+Jobs:
+- analyze_customer_task: Full analysis pipeline
+- monitor_tests_task: Check all active A/B tests
+"""
+
+from celery import Celery
+
+from app.config import get_settings
+
+settings = get_settings()
+
+celery_app = Celery(
+    "pokant",
+    broker=settings.redis_url,
+    backend=settings.redis_url,
+)
+
+celery_app.conf.update(
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="UTC",
+    enable_utc=True,
+    task_track_started=True,
+    task_time_limit=3600,  # 1 hour max
+    worker_prefetch_multiplier=1,
+)

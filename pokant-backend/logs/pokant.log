@@ -1,0 +1,16 @@
+2026-02-10 16:06:14,323 - app.middleware.request_logger - INFO - → GET /health
+2026-02-10 16:06:14,388 - app.middleware.request_logger - INFO - ← GET /health status=503 duration=0.06s
+2026-02-10 16:28:04,130 - app.middleware.request_logger - INFO - → GET /docs
+2026-02-10 16:28:04,137 - app.middleware.request_logger - INFO - ← GET /docs status=200 duration=0.01s
+2026-02-10 16:28:05,065 - app.middleware.request_logger - INFO - → GET /openapi.json
+2026-02-10 16:28:05,090 - app.middleware.request_logger - INFO - ← GET /openapi.json status=200 duration=0.03s
+2026-02-10 16:29:19,566 - app.middleware.request_logger - INFO - → GET /health
+2026-02-10 16:29:19,587 - app.middleware.request_logger - INFO - ← GET /health status=503 duration=0.02s
+2026-02-10 16:29:19,687 - app.middleware.request_logger - INFO - → GET /favicon.ico
+2026-02-10 16:29:19,690 - app.middleware.request_logger - INFO - ← GET /favicon.ico status=404 duration=0.00s
+2026-02-10 16:29:37,855 - app.middleware.request_logger - INFO - → GET /openapi.json
+2026-02-10 16:29:37,858 - app.middleware.request_logger - INFO - ← GET /openapi.json status=200 duration=0.00s
+2026-02-10 22:33:37,259 - app.middleware.request_logger - INFO - → GET /
+2026-02-10 22:33:37,293 - app.middleware.request_logger - INFO - ← GET / status=404 duration=0.04s
+2026-02-10 22:33:37,403 - app.middleware.request_logger - INFO - → GET /favicon.ico
+2026-02-10 22:33:37,404 - app.middleware.request_logger - INFO - ← GET /favicon.ico status=404 duration=0.00s
