@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import time
 import uuid
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
