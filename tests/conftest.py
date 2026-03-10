@@ -72,7 +72,7 @@ import os
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/computeruse_test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-placeholder")
+os.environ["ANTHROPIC_API_KEY"] = os.environ.get("ANTHROPIC_API_KEY") or "test-key-placeholder"
 os.environ.setdefault("BROWSERBASE_API_KEY", "test")
 os.environ.setdefault("BROWSERBASE_PROJECT_ID", "test")
 os.environ.setdefault("R2_ACCESS_KEY", "test")
