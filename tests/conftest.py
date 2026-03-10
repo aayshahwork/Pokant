@@ -92,7 +92,9 @@ os.environ.setdefault("REPLAY_DIR", "./replays")
 if "computeruse.config" in sys.modules:
     del sys.modules["computeruse.config"]
 
-# rich ── already available as a dev dependency; no stub needed.
+# rich ───────────────────────────────────────────────────────────────────────
+_rich = _stub("rich")
+_rich_console = _stub("rich.console", Console=MagicMock)
 
 # ---------------------------------------------------------------------------
 # pytest-asyncio global mode
