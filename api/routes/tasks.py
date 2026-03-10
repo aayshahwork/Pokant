@@ -11,7 +11,6 @@ GET    /api/v1/tasks/{task_id}/replay  Get signed replay URL
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime, timezone
 
