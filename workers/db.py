@@ -1,13 +1,13 @@
 """
-workers/db.py — Synchronous SQLAlchemy engine for Celery workers.
+workers/db.py — SQLAlchemy engines for Celery workers.
 
-Celery workers run synchronous code, so we need a sync engine (psycopg2)
-rather than the async engine (asyncpg) used by the FastAPI application.
+Provides both a synchronous engine (psycopg2, used by Celery task functions)
+and an async engine (asyncpg, used by async code running inside asyncio.run).
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import create_engine, Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -48,3 +48,41 @@ def _get_session_factory() -> sessionmaker:
 def get_sync_session() -> Session:
     """Return a new synchronous DB session. Caller must close it."""
     return _get_session_factory()()
+
+
+# ---------------------------------------------------------------------------
+# Async engine — used by SessionManager and other async worker code
+# (called from within asyncio.run() in execute_task).
+# ---------------------------------------------------------------------------
+
+_async_engine: Optional[Any] = None
+_async_sf: Optional[Any] = None
+
+
+def _get_async_engine() -> Any:
+    """Lazily create the async engine."""
+    global _async_engine
+    if _async_engine is None:
+        from sqlalchemy.ext.asyncio import create_async_engine as _cae
+
+        _async_engine = _cae(
+            worker_settings.DATABASE_URL,
+            pool_size=5,
+            max_overflow=3,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+        )
+    return _async_engine
+
+
+def get_async_session_factory() -> Any:
+    """Return an async session factory. Lazily initialised."""
+    global _async_sf
+    if _async_sf is None:
+        from sqlalchemy.ext.asyncio import async_sessionmaker
+
+        _async_sf = async_sessionmaker(
+            bind=_get_async_engine(),
+            expire_on_commit=False,
+        )
+    return _async_sf
