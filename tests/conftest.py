@@ -63,34 +63,27 @@ _aiohttp = _stub("aiohttp")
 _aiohttp.ClientSession = MagicMock  # type: ignore[attr-defined]
 _aiohttp.ClientError = Exception     # type: ignore[attr-defined]
 
-# httpx ──────────────────────────────────────────────────────────────────────
-_httpx = _stub("httpx")
-_httpx.AsyncClient = MagicMock   # type: ignore[attr-defined]
-_httpx.Response = MagicMock      # type: ignore[attr-defined]
+# httpx — NOT stubbed (required by starlette.testclient)
 
 # pydantic_settings ──────────────────────────────────────────────────────────
-# The real Settings object reads from the environment; stub it so config.py
-# can be imported without a .env file present.
-_pydantic_settings = _stub("pydantic_settings")
+# Set environment defaults so api.config.Settings can be imported without a
+# .env file.  We use the real pydantic_settings since it's installed.
+import os
 
-class _BaseSettings:  # minimal stand-in
-    def __init__(self, **_: object) -> None: ...
-    class model_config: ...  # noqa: N801
-
-_pydantic_settings.BaseSettings = _BaseSettings          # type: ignore[attr-defined]
-_pydantic_settings.SettingsConfigDict = dict             # type: ignore[attr-defined]
-
-# Patch config.settings so modules that import it get a predictable object
-# rather than triggering real environment variable validation.
-import importlib, os
-
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/computeruse_test")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-placeholder")
+os.environ.setdefault("BROWSERBASE_API_KEY", "test")
+os.environ.setdefault("BROWSERBASE_PROJECT_ID", "test")
+os.environ.setdefault("R2_ACCESS_KEY", "test")
+os.environ.setdefault("R2_SECRET_KEY", "test")
+os.environ.setdefault("R2_ENDPOINT", "https://test.r2.dev")
+os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_placeholder")
+os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_test")
+os.environ.setdefault("API_SECRET_KEY", "test-secret")
+os.environ.setdefault("ENCRYPTION_MASTER_KEY", "test-encryption-key")
 os.environ.setdefault("SESSION_DIR", "./sessions")
 os.environ.setdefault("REPLAY_DIR", "./replays")
-
-# Force re-evaluation of config with the stubs in place.
-if "computeruse.config" in sys.modules:
-    del sys.modules["computeruse.config"]
 
 # rich ───────────────────────────────────────────────────────────────────────
 _rich = _stub("rich")
