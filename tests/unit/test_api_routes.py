@@ -115,7 +115,11 @@ def client(test_account, mock_db, mock_redis):
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_redis] = override_redis
 
-    yield TestClient(app)
+    # Patch the Celery send_task so tests don't connect to Redis broker
+    from unittest.mock import patch
+    with patch("api.routes.tasks._celery") as mock_celery:
+        mock_celery.send_task = MagicMock()
+        yield TestClient(app)
 
     app.dependency_overrides.clear()
 

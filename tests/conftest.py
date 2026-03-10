@@ -85,6 +85,18 @@ os.environ.setdefault("ENCRYPTION_MASTER_KEY", "test-encryption-key")
 os.environ.setdefault("SESSION_DIR", "./sessions")
 os.environ.setdefault("REPLAY_DIR", "./replays")
 
+# boto3 ────────────────────────────────────────────────────────────────────
+_boto3 = _stub("boto3", client=MagicMock)
+_botocore = _stub("botocore")
+_botocore_exceptions = _stub(
+    "botocore.exceptions",
+    BotoCoreError=Exception,
+    ClientError=Exception,
+)
+
+# psycopg2 ─────────────────────────────────────────────────────────────────
+_psycopg2 = _stub("psycopg2")
+
 # rich ───────────────────────────────────────────────────────────────────────
 _rich = _stub("rich")
 _rich_console = _stub("rich.console", Console=MagicMock)

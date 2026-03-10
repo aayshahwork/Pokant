@@ -7,3 +7,5 @@ structlog
 cryptography
 boto3
 requests
+sqlalchemy
+psycopg2-binary

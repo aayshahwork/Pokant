@@ -1,26 +1,32 @@
 """
 workers/tasks.py — Celery task definitions for async browser automation.
 
-The Celery worker is started separately from the API server:
-    celery -A workers.main worker --loglevel=info --concurrency=4
+Two tasks:
+- execute_task: Picks up queued tasks, runs the browser agent, persists results.
+- deliver_webhook: Delivers webhook notifications with HMAC-SHA256 signing.
+
+Start the worker:
+    celery -A workers.main worker --loglevel=info --pool=prefork --concurrency=2
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
+import json
 import os
-import time
+import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
-import boto3
-import requests
-from botocore.exceptions import BotoCoreError, ClientError
+import redis as redis_lib
 from celery import Celery
 from celery.utils.log import get_task_logger
+from sqlalchemy import text
 
-from computeruse.executor import TaskExecutor
-from computeruse.models import TaskConfig
+from workers.config import worker_settings
 
 logger = get_task_logger(__name__)
 
@@ -28,15 +34,11 @@ logger = get_task_logger(__name__)
 # Celery application
 # ---------------------------------------------------------------------------
 
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-
-celery_app = Celery(
-    "computeruse",
-    broker=REDIS_URL,
-    backend=REDIS_URL,
-)
+celery_app = Celery("computeruse", broker=worker_settings.REDIS_URL)
 
 celery_app.conf.update(
+    # No result backend — results are persisted to the database.
+    result_backend=None,
     # Serialisation
     task_serializer="json",
     result_serializer="json",
@@ -45,344 +47,406 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     # Reliability
-    task_acks_late=True,               # ack only after the task finishes
-    worker_prefetch_multiplier=1,      # one task at a time per worker process
-    task_reject_on_worker_lost=True,   # re-queue if the worker dies mid-task
-    # Result expiry
-    result_expires=86_400,             # keep results for 24 hours
-    # Retry defaults (overridden per-task)
-    task_max_retries=2,
-    task_default_retry_delay=10,
+    task_acks_late=True,
+    worker_prefetch_multiplier=1,
+    task_reject_on_worker_lost=True,
 )
 
 # ---------------------------------------------------------------------------
-# Database helpers (stubs — replace with real async DB calls via shared/db.py)
+# Redis client (for distributed locks)
 # ---------------------------------------------------------------------------
 
-def _db_update(task_id: str, fields: Dict[str, Any]) -> None:
-    """Persist task state changes.
+_redis = redis_lib.Redis.from_url(worker_settings.REDIS_URL, decode_responses=True)
 
-    In production this should issue an UPDATE to the tasks table.
-    Replace with:
-        asyncio.run(db.execute(
-            "UPDATE tasks SET … WHERE task_id = :task_id", {…}
-        ))
-    """
-    logger.debug("DB update task=%s fields=%s", task_id, list(fields.keys()))
+# ---------------------------------------------------------------------------
+# Webhook retry backoff schedule (seconds)
+# ---------------------------------------------------------------------------
 
-
-def _db_fetch(task_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch a task row by ID.
-
-    In production replace with:
-        return asyncio.run(db.fetch_one(
-            "SELECT * FROM tasks WHERE task_id = :task_id", {"task_id": task_id}
-        ))
-    """
-    return None
-
+WEBHOOK_BACKOFFS = [30, 60, 120, 240, 480]
 
 # ---------------------------------------------------------------------------
 # Main Celery task
 # ---------------------------------------------------------------------------
 
+
 @celery_app.task(
     bind=True,
     name="computeruse.execute_task",
-    max_retries=2,
-    default_retry_delay=15,
-    soft_time_limit=600,    # SIGTERM after 10 minutes
-    time_limit=660,         # SIGKILL after 11 minutes
+    max_retries=0,
+    soft_time_limit=660,
+    time_limit=720,
 )
-def execute_task(self, task_id: str, request: Dict[str, Any], api_key: str) -> Dict[str, Any]:
-    """Execute a browser automation task asynchronously.
+def execute_task(self, task_id: str, task_config_json: str) -> None:
+    """Execute a browser automation task.
 
-    This is the core Celery task.  It runs inside a worker process and is
-    responsible for the full task lifecycle:
-
-    1. Mark the task as ``"running"`` in the database.
-    2. Build a :class:`TaskConfig` from the raw *request* dict.
-    3. Run the :class:`TaskExecutor` inside a fresh event loop.
-    4. Upload the replay artifact to S3 if one was produced.
-    5. Write the final result back to the database.
-    6. Fire the webhook (if a ``webhook_url`` was provided).
-
-    Args:
-        task_id:  Unique identifier for this task run.
-        request:  Serialised :class:`TaskRequest` fields from the API layer.
-        api_key:  The API key that created the task (used for scoped S3 paths).
-
-    Returns:
-        A dict representation of the final task state, which Celery stores
-        in the result backend for polling.
-
-    Raises:
-        :exc:`celery.exceptions.Retry`: On recoverable errors (up to
-        ``max_retries`` times).
+    Lifecycle:
+    1. Atomic claim — UPDATE … WHERE status='queued' (duplicate prevention).
+    2. Redis lock — prevents concurrent execution of the same task.
+    3. Build TaskConfig, create TaskExecutor, run it.
+    4. Persist result, steps, and cost to the database.
+    5. Increment account.monthly_steps_used.
+    6. Upload replay to R2/S3.
+    7. Enqueue webhook delivery if webhook_url is present.
     """
-    logger.info("Starting task %s", task_id)
+    from workers.db import get_sync_session
 
-    # ── 1. Mark as running ─────────────────────────────────────────────────
-    _db_update(task_id, {
-        "status": "running",
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "celery_task_id": self.request.id,
-    })
+    logger.info("Starting task %s on worker %s", task_id, self.request.hostname)
 
-    # ── 2. Build TaskConfig ────────────────────────────────────────────────
-    config = TaskConfig(
-        url=request["url"],
-        task=request["task"],
-        credentials=request.get("credentials"),
-        output_schema=request.get("output_schema"),
-        max_steps=request.get("max_steps", 50),
-        timeout_seconds=request.get("timeout_seconds", 300),
-    )
+    config_dict = json.loads(task_config_json)
 
-    # ── 3. Execute ─────────────────────────────────────────────────────────
-    browserbase_api_key = os.environ.get("BROWSERBASE_API_KEY")
-    executor = TaskExecutor(
-        model=os.environ.get("DEFAULT_MODEL", "claude-sonnet-4-5"),
-        headless=True,
-        browserbase_api_key=browserbase_api_key,
-    )
+    # ── 1. Atomic claim ────────────────────────────────────────────────────
+    session = get_sync_session()
+    try:
+        result = session.execute(
+            text(
+                "UPDATE tasks "
+                "SET status = 'running', "
+                "    started_at = now(), "
+                "    worker_id = :worker_id "
+                "WHERE id = :task_id::uuid AND status = 'queued'"
+            ),
+            {"task_id": task_id, "worker_id": self.request.hostname},
+        )
+        session.commit()
+
+        if result.rowcount == 0:
+            logger.warning("Task %s already claimed or not queued, skipping", task_id)
+            return
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+    # ── 2. Redis lock ──────────────────────────────────────────────────────
+    timeout_seconds = config_dict.get("timeout_seconds", 300)
+    lock_ttl = timeout_seconds + 60
+    lock = _redis.lock(f"task_lock:{task_id}", timeout=lock_ttl)
+
+    if not lock.acquire(blocking=False):
+        logger.warning("Task %s lock already held, skipping", task_id)
+        return
 
     try:
-        task_result = asyncio.run(executor.execute(config))
+        # ── 3. Build config and execute ────────────────────────────────────
+        from workers.browser_manager import BrowserManager
+        from workers.executor import TaskExecutor
+        from workers.models import TaskConfig, TaskResult
+
+        config = TaskConfig(
+            url=config_dict["url"],
+            task=config_dict["task"],
+            credentials=config_dict.get("credentials"),
+            output_schema=config_dict.get("output_schema"),
+            max_steps=config_dict.get("max_steps", 50),
+            timeout_seconds=timeout_seconds,
+            max_cost_cents=config_dict.get("max_cost_cents"),
+            session_id=config_dict.get("session_id"),
+        )
+
+        from anthropic import Anthropic
+
+        llm_client = Anthropic(api_key=worker_settings.ANTHROPIC_API_KEY)
+        browser_manager = BrowserManager(
+            browserbase_api_key=worker_settings.BROWSERBASE_API_KEY or None,
+            browserbase_project_id=worker_settings.BROWSERBASE_PROJECT_ID or None,
+        )
+        executor = TaskExecutor(
+            config=config,
+            browser_manager=browser_manager,
+            llm_client=llm_client,
+            use_cloud=bool(worker_settings.BROWSERBASE_API_KEY),
+        )
+
+        task_result: TaskResult = asyncio.run(executor.execute())
+
+        # ── 4-7. Persist result ────────────────────────────────────────────
+        _persist_result(task_id, task_result, config_dict)
+
     except Exception as exc:
-        logger.exception("Executor raised an unexpected error for task %s", task_id)
-        _handle_failure(task_id, request, str(exc))
-        return _build_output(task_id, success=False, error=str(exc))
-
-    # ── 4. Upload replay ───────────────────────────────────────────────────
-    replay_url: Optional[str] = None
-    if task_result.replay_path:
+        logger.exception("Task %s failed with exception", task_id)
+        _persist_failure(task_id, str(exc), config_dict)
+    finally:
         try:
-            replay_url = upload_replay(task_result.replay_path, task_id)
-            logger.info("Replay uploaded for task %s → %s", task_id, replay_url)
-        except Exception as exc:
-            # A replay upload failure must not fail the whole task.
-            logger.warning("Replay upload failed for task %s: %s", task_id, exc)
-
-    # ── 5. Persist result ──────────────────────────────────────────────────
-    completed_at = datetime.now(timezone.utc)
-    final_status = "completed" if task_result.success else "failed"
-
-    db_fields: Dict[str, Any] = {
-        "status": final_status,
-        "success": task_result.success,
-        "result": task_result.result,
-        "error": task_result.error,
-        "replay_url": replay_url or task_result.replay_url,
-        "replay_path": task_result.replay_path,
-        "steps": task_result.steps,
-        "duration_ms": task_result.duration_ms,
-        "completed_at": completed_at.isoformat(),
-    }
-    _db_update(task_id, db_fields)
-    logger.info(
-        "Task %s finished: status=%s steps=%d duration=%dms",
-        task_id,
-        final_status,
-        task_result.steps,
-        task_result.duration_ms,
-    )
-
-    # ── 6. Fire webhook ────────────────────────────────────────────────────
-    webhook_url: Optional[str] = request.get("webhook_url")
-    if webhook_url:
-        payload = {
-            "task_id": task_id,
-            "status": final_status,
-            "success": task_result.success,
-            "result": task_result.result,
-            "error": task_result.error,
-            "replay_url": replay_url,
-            "steps": task_result.steps,
-            "duration_ms": task_result.duration_ms,
-            "completed_at": completed_at.isoformat(),
-        }
-        _fire_webhook(webhook_url, payload, task_id)
-
-    return _build_output(
-        task_id=task_id,
-        success=task_result.success,
-        result=task_result.result,
-        error=task_result.error,
-        replay_url=replay_url,
-        steps=task_result.steps,
-        duration_ms=task_result.duration_ms,
-        completed_at=completed_at,
-    )
+            lock.release()
+        except Exception:
+            logger.warning("Failed to release lock for task %s", task_id)
 
 
 # ---------------------------------------------------------------------------
-# Helper: upload replay to S3
+# Result persistence
 # ---------------------------------------------------------------------------
 
-def upload_replay(file_path: str, task_id: str) -> str:
-    """Upload a local replay file to S3 and return its public CDN URL.
 
-    The file is stored at ``replays/<task_id>/<filename>`` in the configured
-    S3 bucket.  The bucket must either be public or fronted by a CDN
-    (CloudFront) that allows unauthenticated ``GetObject`` requests.
+def _persist_result(task_id: str, result: Any, config_dict: dict) -> None:
+    """Write task result, steps, and account usage to the database."""
+    from api.models.account import Account
+    from api.models.task import Task
+    from api.models.task_step import TaskStep
+    from workers.db import get_sync_session
 
-    Args:
-        file_path:  Local filesystem path to the replay file.
-        task_id:    Task identifier used to build the S3 key prefix.
-
-    Returns:
-        The HTTPS URL at which the replay can be accessed publicly.
-
-    Raises:
-        :exc:`RuntimeError`: If ``AWS_BUCKET_NAME`` is not configured.
-        :exc:`botocore.exceptions.ClientError`: On S3 API errors.
-        :exc:`FileNotFoundError`: If *file_path* does not exist.
-    """
-    bucket_name = os.environ.get("AWS_BUCKET_NAME", "computeruse-replays")
-    aws_region = os.environ.get("AWS_REGION", "us-east-1")
-    cdn_base = os.environ.get("AWS_CDN_BASE_URL")  # e.g. https://cdn.computeruse.dev
-
-    import pathlib
-    path = pathlib.Path(file_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Replay file not found: {file_path}")
-
-    s3_key = f"replays/{task_id}/{path.name}"
-
-    # Infer content type from extension.
-    content_type = "application/json" if path.suffix == ".json" else "text/html"
-
+    session = get_sync_session()
     try:
+        task = session.get(Task, uuid.UUID(task_id))
+        if task is None:
+            logger.error("Task %s not found in DB during persist", task_id)
+            return
+
+        task.status = result.status
+        task.success = result.success
+        task.result = result.result
+        task.error_message = result.error
+        task.total_steps = result.steps
+        task.duration_ms = result.duration_ms
+        task.cost_cents = Decimal(str(result.cost_cents))
+        task.total_tokens_in = sum(s.tokens_in for s in result.step_data)
+        task.total_tokens_out = sum(s.tokens_out for s in result.step_data)
+        task.completed_at = datetime.now(timezone.utc)
+
+        # Upload replay
+        if result.step_data:
+            try:
+                replay_key = _upload_replay(task_id, result)
+                task.replay_s3_key = replay_key
+            except Exception as exc:
+                logger.warning("Replay upload failed for task %s: %s", task_id, exc)
+
+        # Insert step data
+        for step in result.step_data:
+            task_step = TaskStep(
+                task_id=uuid.UUID(task_id),
+                step_number=step.step_number,
+                action_type=str(step.action_type),
+                description=step.description[:500] if step.description else None,
+                llm_tokens_in=step.tokens_in,
+                llm_tokens_out=step.tokens_out,
+                duration_ms=step.duration_ms,
+                success=step.success,
+                error_message=step.error,
+            )
+            session.add(task_step)
+
+        # Increment account.monthly_steps_used
+        account = session.get(Account, task.account_id)
+        if account:
+            account.monthly_steps_used += result.steps
+
+        session.commit()
+
+        # Enqueue webhook if present
+        webhook_url = config_dict.get("webhook_url") or task.webhook_url
+        if webhook_url:
+            deliver_webhook.apply_async(
+                args=[task_id, webhook_url],
+                countdown=1,
+            )
+
+        logger.info(
+            "Task %s persisted: status=%s steps=%d cost=%.2fc",
+            task_id,
+            result.status,
+            result.steps,
+            result.cost_cents,
+        )
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def _persist_failure(task_id: str, error: str, config_dict: dict) -> None:
+    """Write a failed terminal state to the database."""
+    from api.models.task import Task
+    from workers.db import get_sync_session
+
+    session = get_sync_session()
+    try:
+        task = session.get(Task, uuid.UUID(task_id))
+        if task is None:
+            return
+
+        task.status = "failed"
+        task.success = False
+        task.error_message = error[:2000]
+        task.completed_at = datetime.now(timezone.utc)
+        session.commit()
+
+        webhook_url = config_dict.get("webhook_url") or task.webhook_url
+        if webhook_url:
+            deliver_webhook.apply_async(args=[task_id, webhook_url], countdown=1)
+    except Exception:
+        session.rollback()
+        logger.exception("Failed to persist failure for task %s", task_id)
+    finally:
+        session.close()
+
+
+# ---------------------------------------------------------------------------
+# Replay upload
+# ---------------------------------------------------------------------------
+
+
+def _upload_replay(task_id: str, result: Any) -> str:
+    """Generate HTML replay and upload to R2/S3. Returns the S3 key."""
+    import tempfile
+
+    import boto3
+
+    from workers.replay import ReplayGenerator
+
+    replay_gen = ReplayGenerator(
+        steps=result.step_data,
+        task_metadata={
+            "task_id": task_id,
+            "duration_ms": result.duration_ms,
+            "success": result.success,
+        },
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        replay_path = f"{tmpdir}/{task_id}.html"
+        replay_gen.generate(replay_path)
+
+        s3_key = f"replays/{task_id}/replay.html"
         s3 = boto3.client(
             "s3",
-            region_name=aws_region,
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+            endpoint_url=worker_settings.R2_ENDPOINT or None,
+            aws_access_key_id=worker_settings.R2_ACCESS_KEY,
+            aws_secret_access_key=worker_settings.R2_SECRET_KEY,
         )
         s3.upload_file(
-            str(path),
-            bucket_name,
+            replay_path,
+            worker_settings.R2_BUCKET_NAME,
             s3_key,
             ExtraArgs={
-                "ContentType": content_type,
+                "ContentType": "text/html",
                 "CacheControl": "public, max-age=86400",
             },
         )
-    except (BotoCoreError, ClientError) as exc:
-        raise RuntimeError(f"S3 upload failed for key '{s3_key}': {exc}") from exc
 
-    if cdn_base:
-        return f"{cdn_base.rstrip('/')}/{s3_key}"
-
-    return f"https://{bucket_name}.s3.{aws_region}.amazonaws.com/{s3_key}"
+    return s3_key
 
 
 # ---------------------------------------------------------------------------
-# Private helpers
+# Webhook delivery task
 # ---------------------------------------------------------------------------
 
-def _fire_webhook(
-    webhook_url: str,
-    payload: Dict[str, Any],
-    task_id: str,
-    timeout: int = 10,
-    retries: int = 3,
-) -> None:
-    """POST *payload* to *webhook_url* with simple linear retries.
 
-    Failures are logged but never propagated — a webhook delivery failure
-    must never affect the task's own success/failure status.
+@celery_app.task(
+    bind=True,
+    name="computeruse.deliver_webhook",
+    max_retries=5,
+)
+def deliver_webhook(self, task_id: str, webhook_url: str) -> None:
+    """Deliver a webhook notification for a completed/failed task.
 
-    Args:
-        webhook_url: The URL to POST to.
-        payload:     JSON-serialisable dict to send as the request body.
-        task_id:     Used in log messages only.
-        timeout:     Per-attempt HTTP timeout in seconds.
-        retries:     Maximum number of delivery attempts.
+    Signs the payload with HMAC-SHA256 using the account's webhook_secret.
+    Retries up to 5 times with backoff: 30s, 60s, 120s, 240s, 480s.
+    On final failure, marks task.webhook_delivered = False.
     """
-    for attempt in range(1, retries + 1):
-        try:
-            response = requests.post(
-                webhook_url,
-                json=payload,
-                timeout=timeout,
-                headers={"Content-Type": "application/json", "User-Agent": "ComputerUse/0.1"},
-            )
-            if response.status_code < 400:
-                logger.info(
-                    "Webhook delivered for task %s → %d (attempt %d)",
-                    task_id, response.status_code, attempt,
-                )
-                return
-            logger.warning(
-                "Webhook attempt %d/%d for task %s returned HTTP %d",
-                attempt, retries, task_id, response.status_code,
-            )
-        except requests.RequestException as exc:
-            logger.warning(
-                "Webhook attempt %d/%d for task %s failed: %s",
-                attempt, retries, task_id, exc,
-            )
+    import requests
 
-        if attempt < retries:
-            time.sleep(2 ** attempt)  # 2s, 4s between retries
+    from api.models.account import Account
+    from api.models.task import Task
+    from workers.db import get_sync_session
 
-    logger.error(
-        "Webhook delivery exhausted after %d attempts for task %s → %s",
-        retries, task_id, webhook_url,
-    )
+    session = get_sync_session()
+    try:
+        task = session.get(Task, uuid.UUID(task_id))
+        if task is None:
+            logger.error("Webhook: task %s not found", task_id)
+            return
 
+        account = session.get(Account, task.account_id)
 
-def _handle_failure(task_id: str, request: Dict[str, Any], error: str) -> None:
-    """Write a failed terminal state to the DB and optionally fire the webhook."""
-    completed_at = datetime.now(timezone.utc)
-    _db_update(task_id, {
-        "status": "failed",
-        "success": False,
-        "error": error,
-        "completed_at": completed_at.isoformat(),
-    })
+        # Build payload
+        payload = {
+            "task_id": task_id,
+            "status": task.status,
+            "result": task.result,
+            "replay_url": (
+                f"https://r2.computeruse.dev/{task.replay_s3_key}"
+                if task.replay_s3_key
+                else None
+            ),
+            "duration_ms": task.duration_ms,
+        }
+        payload_bytes = json.dumps(
+            payload, separators=(",", ":"), sort_keys=True
+        ).encode()
 
-    webhook_url: Optional[str] = request.get("webhook_url")
-    if webhook_url:
-        _fire_webhook(
+        # HMAC signature
+        headers: Dict[str, str] = {
+            "Content-Type": "application/json",
+            "User-Agent": "ComputerUse/1.0",
+        }
+
+        if account and account.webhook_secret:
+            signature = hmac.new(
+                account.webhook_secret.encode(),
+                payload_bytes,
+                hashlib.sha256,
+            ).hexdigest()
+            headers["X-CU-Signature"] = signature
+
+        # POST
+        response = requests.post(
             webhook_url,
-            {
-                "task_id": task_id,
-                "status": "failed",
-                "success": False,
-                "error": error,
-                "completed_at": completed_at.isoformat(),
-            },
-            task_id,
+            data=payload_bytes,
+            headers=headers,
+            timeout=10,
         )
 
+        if response.status_code >= 400:
+            raise requests.RequestException(
+                f"Webhook returned HTTP {response.status_code}"
+            )
 
-def _build_output(
-    task_id: str,
-    *,
-    success: bool,
-    result: Optional[Dict[str, Any]] = None,
-    error: Optional[str] = None,
-    replay_url: Optional[str] = None,
-    steps: int = 0,
-    duration_ms: int = 0,
-    completed_at: Optional[datetime] = None,
-) -> Dict[str, Any]:
-    """Build the dict that Celery stores in the result backend.
+        # Mark delivered
+        task.webhook_delivered = True
+        session.commit()
 
-    Keeping the result small and JSON-safe avoids serialisation surprises
-    when consumers read it via :func:`celery.result.AsyncResult.get`.
-    """
-    return {
-        "task_id": task_id,
-        "status": "completed" if success else "failed",
-        "success": success,
-        "result": result,
-        "error": error,
-        "replay_url": replay_url,
-        "steps": steps,
-        "duration_ms": duration_ms,
-        "completed_at": completed_at.isoformat() if completed_at else None,
-    }
+        logger.info(
+            "Webhook delivered for task %s -> %d (attempt %d/%d)",
+            task_id,
+            response.status_code,
+            self.request.retries + 1,
+            self.max_retries + 1,
+        )
+
+    except requests.RequestException as exc:
+        session.rollback()
+        if self.request.retries >= self.max_retries:
+            _mark_webhook_failed(task_id)
+            logger.error(
+                "Webhook delivery exhausted after %d attempts for task %s -> %s",
+                self.max_retries + 1,
+                task_id,
+                webhook_url,
+            )
+            return
+        backoff = WEBHOOK_BACKOFFS[min(self.request.retries, len(WEBHOOK_BACKOFFS) - 1)]
+        raise self.retry(countdown=backoff, exc=exc)
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def _mark_webhook_failed(task_id: str) -> None:
+    """Mark webhook_delivered=False on final failure."""
+    from api.models.task import Task
+    from workers.db import get_sync_session
+
+    session = get_sync_session()
+    try:
+        task = session.get(Task, uuid.UUID(task_id))
+        if task:
+            task.webhook_delivered = False
+            session.commit()
+    except Exception:
+        session.rollback()
+    finally:
+        session.close()

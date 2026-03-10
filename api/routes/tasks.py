@@ -11,26 +11,34 @@ GET    /api/v1/tasks/{task_id}/replay  Get signed replay URL
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 
 import structlog
+from celery import Celery
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.config import settings
 from api.dependencies import get_db, get_redis
 from api.middleware.auth import get_current_account
 from api.models.account import Account
 from api.models.task import Task
 from api.schemas.task import ErrorResponse, TaskCreateRequest, TaskListResponse, TaskResponse
+from shared.constants import TIER_LIMITS
 
 logger = structlog.get_logger("api.tasks")
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["Tasks"])
 
 IDEMPOTENCY_TTL = 86400  # 24 hours
+
+# Celery client for enqueuing tasks (send-only, no result backend needed).
+_celery = Celery(broker=settings.REDIS_URL)
+_celery.conf.update(task_serializer="json", accept_content=["json"])
 
 
 def _task_to_response(task: Task) -> TaskResponse:
@@ -104,13 +112,31 @@ async def create_task(
     await db.refresh(task)
 
     # -- Enqueue Celery task --
-    # Credentials are passed to the worker but NEVER logged or returned
-    # In production: execute_task.apply_async(
-    #     args=[str(task.id)],
-    #     kwargs={"url": str(body.url), "task": body.task, ...},
-    #     queue=f"tasks.{account.tier or 'free'}",
-    # )
-    logger.info("task_queued", task_id=str(task.id), account_id=str(account.id))
+    tier = account.tier or "free"
+    tier_config = TIER_LIMITS.get(tier, TIER_LIMITS["free"])
+
+    config_json = json.dumps({
+        "url": str(body.url),
+        "task": body.task,
+        "credentials": body.credentials,
+        "output_schema": body.output_schema,
+        "max_steps": tier_config["max_steps"],
+        "timeout_seconds": min(body.timeout_seconds, tier_config["timeout"]),
+        "max_cost_cents": body.max_cost_cents,
+        "session_id": str(body.session_id) if body.session_id else None,
+        "webhook_url": str(body.webhook_url) if body.webhook_url else None,
+    })
+
+    _celery.send_task(
+        "computeruse.execute_task",
+        args=[str(task.id), config_json],
+        queue=f"tasks:{tier}",
+        task_id=str(task.id),
+        soft_time_limit=tier_config["timeout"] + 60,
+        time_limit=tier_config["timeout"] + 120,
+    )
+
+    logger.info("task_queued", task_id=str(task.id), account_id=str(account.id), queue=f"tasks:{tier}")
 
     response = _task_to_response(task)
 
