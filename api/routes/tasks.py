@@ -29,6 +29,7 @@ from api.models.account import Account
 from api.models.task import Task
 from api.schemas.task import ErrorResponse, TaskCreateRequest, TaskListResponse, TaskResponse
 from shared.constants import TIER_LIMITS
+from shared.url_validator import SSRFBlockedError, validate_url_async, validate_webhook_url
 
 logger = structlog.get_logger("api.tasks")
 
@@ -82,6 +83,24 @@ async def create_task(
         cached = await redis.get(cache_key)
         if cached:
             return TaskResponse.model_validate_json(cached)
+
+    # -- SSRF validation --
+    try:
+        await validate_url_async(str(body.url))
+    except SSRFBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error_code": "INVALID_INPUT", "message": str(exc)},
+        )
+
+    if body.webhook_url:
+        try:
+            await validate_webhook_url(str(body.webhook_url))
+        except SSRFBlockedError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error_code": "INVALID_INPUT", "message": str(exc)},
+            )
 
     # -- Quota check --
     if account.monthly_steps_used >= account.monthly_step_limit:

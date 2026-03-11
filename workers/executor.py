@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from workers.browser_manager import BrowserManager
+from workers.credential_injector import CredentialInjector
 from workers.models import ActionType, StepData, TaskConfig, TaskResult
 
 logger = logging.getLogger(__name__)
@@ -106,10 +107,6 @@ _TOOLS = [
         },
     },
 ]
-
-
-class AuthFormUnrecognizedError(Exception):
-    """Raised when the credential injection heuristic cannot find the login form."""
 
 
 class TaskExecutor:
@@ -418,56 +415,17 @@ class TaskExecutor:
             return f"Waited {seconds}s"
 
         elif tool_name == "inject_credentials":
-            await self._inject_credentials(
-                page,
-                tool_input.get("username_selector"),
-                tool_input.get("password_selector"),
-            )
+            injector = CredentialInjector()
+            selectors = None
+            if tool_input.get("username_selector") or tool_input.get("password_selector"):
+                selectors = {
+                    "username_selector": tool_input.get("username_selector"),
+                    "password_selector": tool_input.get("password_selector"),
+                }
+            await injector.inject(page, self.config.credentials or {}, selectors=selectors)
             return "Credentials injected"
 
         return f"Unknown tool: {tool_name}"
-
-    async def _inject_credentials(
-        self,
-        page: Any,
-        username_selector: Optional[str] = None,
-        password_selector: Optional[str] = None,
-    ) -> None:
-        """Inject credentials into login form fields via page.fill().
-
-        Uses provided CSS selectors or falls back to heuristic detection.
-        Credentials are NEVER sent to the LLM.
-        """
-        if not self.config.credentials:
-            raise AuthFormUnrecognizedError("No credentials configured")
-
-        username = self.config.credentials.get("username", "")
-        password = self.config.credentials.get("password", "")
-
-        if not username_selector or not password_selector:
-            password_selector = await self._find_selector(page, 'input[type="password"]')
-            if not password_selector:
-                raise AuthFormUnrecognizedError("Could not find password input on page")
-
-            username_selector = await self._find_selector(
-                page,
-                'input[type="email"], input[type="text"][name*="user"], '
-                'input[type="text"][name*="email"], input[type="text"][name*="login"], '
-                'input[type="text"]',
-            )
-            if not username_selector:
-                raise AuthFormUnrecognizedError("Could not find username/email input on page")
-
-        await page.fill(username_selector, username)
-        await page.fill(password_selector, password)
-
-    async def _find_selector(self, page: Any, selector: str) -> Optional[str]:
-        """Return the selector if a matching element exists, else None."""
-        try:
-            element = await page.query_selector(selector)
-            return selector if element else None
-        except Exception:
-            return None
 
     def _build_system_prompt(self, config: TaskConfig) -> str:
         """Build the system prompt. Credentials NEVER appear here."""

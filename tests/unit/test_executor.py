@@ -20,7 +20,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from workers.executor import TaskExecutor, AuthFormUnrecognizedError
+from workers.credential_injector import AuthFormUnrecognizedError
+from workers.executor import TaskExecutor
 from workers.models import ActionType, StepData, TaskConfig, TaskResult
 from workers.replay import ReplayGenerator
 
@@ -178,29 +179,38 @@ class TestBuildSystemPrompt:
 
 class TestInjectCredentials:
     async def test_fill_called_with_selectors(self, task_config, mock_browser_manager, mock_llm_done):
-        executor = TaskExecutor(config=task_config, browser_manager=mock_browser_manager, llm_client=mock_llm_done)
+        from workers.credential_injector import CredentialInjector
+
+        injector = CredentialInjector()
         page = mock_browser_manager._mock_page
 
-        await executor._inject_credentials(page, "#user", "#pass")
+        await injector.inject(
+            page,
+            task_config.credentials,
+            selectors={"username_selector": "#user", "password_selector": "#pass"},
+        )
 
         page.fill.assert_any_call("#user", "alice")
         page.fill.assert_any_call("#pass", "s3cr3t_p@ss!")
 
     async def test_heuristic_fallback(self, task_config, mock_browser_manager, mock_llm_done):
-        executor = TaskExecutor(config=task_config, browser_manager=mock_browser_manager, llm_client=mock_llm_done)
+        from workers.credential_injector import CredentialInjector
+
+        injector = CredentialInjector()
         page = mock_browser_manager._mock_page
         page.query_selector = AsyncMock(return_value=MagicMock())
 
-        await executor._inject_credentials(page, None, None)
+        await injector.inject(page, task_config.credentials)
 
         assert page.fill.call_count == 2
 
     async def test_no_credentials_raises(self, mock_browser_manager, mock_llm_done):
-        config = TaskConfig(url="https://example.com", task="test")
-        executor = TaskExecutor(config=config, browser_manager=mock_browser_manager, llm_client=mock_llm_done)
+        from workers.credential_injector import CredentialInjector
+
+        injector = CredentialInjector()
 
         with pytest.raises(AuthFormUnrecognizedError):
-            await executor._inject_credentials(mock_browser_manager._mock_page, "#u", "#p")
+            await injector.inject(mock_browser_manager._mock_page, {})
 
 
 # ---------------------------------------------------------------------------
