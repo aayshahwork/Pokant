@@ -201,7 +201,11 @@ class TestCheckout:
 
 class TestWebhook:
     def test_checkout_completed_upgrades_tier(self, webhook_client, mock_db):
-        mock_db.execute = AsyncMock()
+        account_id = uuid.uuid4()
+        update_result = MagicMock()
+        update_result.one_or_none.return_value = (account_id,)
+        audit_result = MagicMock()
+        mock_db.execute = AsyncMock(side_effect=[update_result, audit_result])
         mock_db.commit = AsyncMock()
 
         event = {
@@ -223,12 +227,16 @@ class TestWebhook:
         )
         assert resp.status_code == 200
         assert resp.json() == {"received": True}
-        # Verify DB update was called
-        assert mock_db.execute.called
+        # Verify DB update and audit log were called
+        assert mock_db.execute.call_count == 2
         assert mock_db.commit.called
 
     def test_subscription_deleted_downgrades(self, webhook_client, mock_db):
-        mock_db.execute = AsyncMock()
+        account_id = uuid.uuid4()
+        update_result = MagicMock()
+        update_result.one_or_none.return_value = (account_id,)
+        audit_result = MagicMock()
+        mock_db.execute = AsyncMock(side_effect=[update_result, audit_result])
         mock_db.commit = AsyncMock()
 
         event = {

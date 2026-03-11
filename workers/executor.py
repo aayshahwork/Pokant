@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from workers.browser_manager import BrowserManager
+from workers.captcha_solver import CaptchaSolver
+from workers.config import worker_settings
 from workers.credential_injector import CredentialInjector
 from workers.models import ActionType, StepData, TaskConfig, TaskResult
 
@@ -92,6 +94,24 @@ _TOOLS = [
             "properties": {
                 "username_selector": {"type": "string", "description": "CSS selector for the username/email input."},
                 "password_selector": {"type": "string", "description": "CSS selector for the password input."},
+            },
+        },
+    },
+    {
+        "name": "solve_captcha",
+        "description": (
+            "Detect and solve a CAPTCHA on the current page "
+            "(reCAPTCHA v2, hCaptcha, or Cloudflare Turnstile). "
+            "Auto-detects type if not specified."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "captcha_type": {
+                    "type": "string",
+                    "enum": ["recaptcha_v2", "hcaptcha", "turnstile"],
+                    "description": "CAPTCHA type. Omit to auto-detect.",
+                },
             },
         },
     },
@@ -389,12 +409,20 @@ class TaskExecutor:
         if tool_name == "navigate":
             url = tool_input["url"]
             await page.goto(url, wait_until="networkidle", timeout=30_000)
-            return f"Navigated to {url}"
+            captcha_msg = await self._auto_detect_captcha(page)
+            suffix = f" {captcha_msg}" if captcha_msg else ""
+            return f"Navigated to {url}{suffix}"
 
         elif tool_name == "click":
             selector = tool_input["selector"]
             await page.click(selector, timeout=5000)
-            return f"Clicked {selector}"
+            try:
+                await page.wait_for_load_state("networkidle", timeout=5000)
+            except Exception:
+                pass
+            captcha_msg = await self._auto_detect_captcha(page)
+            suffix = f" {captcha_msg}" if captcha_msg else ""
+            return f"Clicked {selector}{suffix}"
 
         elif tool_name == "type_text":
             selector = tool_input["selector"]
@@ -428,7 +456,31 @@ class TaskExecutor:
             await injector.inject(page, self.config.credentials or {}, selectors=selectors)
             return "Credentials injected"
 
+        elif tool_name == "solve_captcha":
+            solver = CaptchaSolver(worker_settings.TWOCAPTCHA_API_KEY)
+            captcha_type = tool_input.get("captcha_type")
+            result = await solver.solve(page, captcha_type)
+            if result.solved:
+                return f"Solved {result.captcha_type} captcha in {result.duration_ms}ms"
+            raise RuntimeError(f"Failed to solve captcha: {result.error}")
+
         return f"Unknown tool: {tool_name}"
+
+    async def _auto_detect_captcha(self, page: Any) -> str:
+        """Check for CAPTCHA after navigation/click. Solve if found. Returns status message or empty."""
+        try:
+            solver = CaptchaSolver(worker_settings.TWOCAPTCHA_API_KEY)
+            captcha_type = await solver.detect_captcha(page)
+            if captcha_type is None:
+                return ""
+            logger.info("captcha_auto_detected", type=captcha_type)
+            result = await solver.solve(page, captcha_type)
+            if result.solved:
+                return f"(auto-solved {result.captcha_type} captcha in {result.duration_ms}ms)"
+            return f"(captcha detected: {result.captcha_type}, solve failed: {result.error})"
+        except Exception as exc:
+            logger.warning("captcha_auto_detect_error", error=str(exc))
+            return ""
 
     def _build_system_prompt(self, config: TaskConfig) -> str:
         """Build the system prompt. Credentials NEVER appear here."""
@@ -449,6 +501,10 @@ class TaskExecutor:
                 "CREDENTIALS: When you encounter a login form, use the inject_credentials tool "
                 "with the CSS selectors for the username and password fields. "
                 "The system will inject credentials securely. Do NOT type credentials yourself."
+            ),
+            (
+                "CAPTCHA: If you encounter a CAPTCHA challenge (reCAPTCHA, hCaptcha, Turnstile), "
+                "use the solve_captcha tool. Auto-detects type if not specified."
             ),
         ]
 
@@ -476,6 +532,7 @@ def _tool_to_action_type(tool_name: str) -> ActionType:
         "scroll": ActionType.SCROLL,
         "wait": ActionType.WAIT,
         "inject_credentials": ActionType.INJECT_CREDENTIALS,
+        "solve_captcha": ActionType.SOLVE_CAPTCHA,
         "done": ActionType.EXTRACT,
     }
     return mapping.get(tool_name, ActionType.UNKNOWN)

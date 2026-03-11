@@ -11,6 +11,7 @@ class WorkerSettings(BaseSettings):
     R2_SECRET_KEY: str = ""
     R2_BUCKET_NAME: str = "computeruse-recordings"
     R2_ENDPOINT: str = ""
+    TWOCAPTCHA_API_KEY: str = ""
     ENCRYPTION_MASTER_KEY: str = "change-me"
 
     model_config = {"env_file": ".env", "extra": "ignore"}

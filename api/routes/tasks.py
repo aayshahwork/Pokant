@@ -29,6 +29,7 @@ from api.models.account import Account
 from api.models.task import Task
 from api.schemas.task import ErrorResponse, TaskCreateRequest, TaskListResponse, TaskResponse
 from shared.constants import TIER_LIMITS
+from api.services.audit_logger import TASK_CANCELLED, TASK_CREATED, TASK_RETRIED, AuditLogger
 from shared.url_validator import SSRFBlockedError, validate_url_async, validate_webhook_url
 
 logger = structlog.get_logger("api.tasks")
@@ -127,6 +128,16 @@ async def create_task(
         created_at=datetime.now(timezone.utc),
     )
     db.add(task)
+    await AuditLogger(db).log(
+        account_id=account.id,
+        actor_type="user",
+        actor_id=str(account.id),
+        action=TASK_CREATED,
+        resource_type="task",
+        resource_id=str(task.id),
+        metadata={"url": str(body.url)},
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(task)
 
@@ -246,6 +257,7 @@ async def list_tasks(
 )
 async def cancel_task(
     task_id: uuid.UUID,
+    request: Request,
     account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -269,8 +281,19 @@ async def cancel_task(
             },
         )
 
+    previous_status = task.status
     task.status = "cancelled"
     task.completed_at = datetime.now(timezone.utc)
+    await AuditLogger(db).log(
+        account_id=account.id,
+        actor_type="user",
+        actor_id=str(account.id),
+        action=TASK_CANCELLED,
+        resource_type="task",
+        resource_id=str(task_id),
+        metadata={"previous_status": previous_status},
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
 
     logger.info("task_cancelled", task_id=str(task_id), account_id=str(account.id))
@@ -289,6 +312,7 @@ async def cancel_task(
 )
 async def retry_task(
     task_id: uuid.UUID,
+    request: Request,
     account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_db),
 ) -> TaskResponse:
@@ -325,6 +349,16 @@ async def retry_task(
         created_at=datetime.now(timezone.utc),
     )
     db.add(new_task)
+    await AuditLogger(db).log(
+        account_id=account.id,
+        actor_type="user",
+        actor_id=str(account.id),
+        action=TASK_RETRIED,
+        resource_type="task",
+        resource_id=str(new_task.id),
+        metadata={"original_task_id": str(task_id)},
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(new_task)
 

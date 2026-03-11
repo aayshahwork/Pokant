@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +23,7 @@ from api.middleware.auth import get_current_account
 from api.models.account import Account
 from api.models.api_key import ApiKey
 from api.schemas.billing import ApiKeyCreateRequest, ApiKeyCreateResponse, ApiKeyResponse
+from api.services.audit_logger import API_KEY_CREATED, API_KEY_REVOKED, AuditLogger
 
 logger = structlog.get_logger("api.account")
 
@@ -86,6 +87,7 @@ async def list_api_keys(
 )
 async def create_api_key(
     body: ApiKeyCreateRequest,
+    request: Request,
     account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_db),
 ) -> ApiKeyCreateResponse:
@@ -103,6 +105,16 @@ async def create_api_key(
         created_at=datetime.now(timezone.utc),
     )
     db.add(api_key)
+    await AuditLogger(db).log(
+        account_id=account.id,
+        actor_type="user",
+        actor_id=str(account.id),
+        action=API_KEY_CREATED,
+        resource_type="api_key",
+        resource_id=str(api_key.id),
+        metadata={"label": body.label, "key_prefix": api_key.key_prefix},
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(api_key)
 
@@ -119,7 +131,7 @@ async def create_api_key(
         key_prefix=api_key.key_prefix,
         key_suffix=api_key.key_suffix,
         label=api_key.label,
-        created_at=api_key.created_at,
+        created_at=api_key.created_at or datetime.now(timezone.utc),
     )
 
 
@@ -133,6 +145,7 @@ async def create_api_key(
 )
 async def revoke_api_key(
     key_id: uuid.UUID,
+    request: Request,
     account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -159,6 +172,16 @@ async def revoke_api_key(
         )
 
     api_key.revoked_at = datetime.now(timezone.utc)
+    await AuditLogger(db).log(
+        account_id=account.id,
+        actor_type="user",
+        actor_id=str(account.id),
+        action=API_KEY_REVOKED,
+        resource_type="api_key",
+        resource_id=str(key_id),
+        metadata={"key_prefix": api_key.key_prefix},
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
 
     logger.info(

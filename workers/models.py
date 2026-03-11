@@ -22,6 +22,7 @@ class ActionType(StrEnum):
     EXTRACT = "extract"
     WAIT = "wait"
     INJECT_CREDENTIALS = "inject_credentials"
+    SOLVE_CAPTCHA = "solve_captcha"
     UNKNOWN = "unknown"
 
 

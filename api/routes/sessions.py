@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,7 @@ from api.dependencies import get_db
 from api.middleware.auth import get_current_account
 from api.models.account import Account
 from api.models.session import Session
+from api.services.audit_logger import SESSION_DELETED, AuditLogger
 
 logger = structlog.get_logger("api.sessions")
 
@@ -155,6 +156,7 @@ async def get_session(
 )
 async def delete_session(
     session_id: uuid.UUID,
+    request: Request,
     account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -173,6 +175,16 @@ async def delete_session(
         )
 
     await db.delete(session)
+    await AuditLogger(db).log(
+        account_id=account.id,
+        actor_type="user",
+        actor_id=str(account.id),
+        action=SESSION_DELETED,
+        resource_type="session",
+        resource_id=str(session_id),
+        metadata={"origin_domain": session.origin_domain},
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
 
     logger.info("session_deleted", session_id=str(session_id), account_id=str(account.id))

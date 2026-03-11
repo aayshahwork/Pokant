@@ -13,7 +13,7 @@ import json
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
@@ -26,6 +26,7 @@ from api.schemas.billing import (
     PortalResponse,
     UsageResponse,
 )
+from api.services.audit_logger import TIER_DOWNGRADED, TIER_UPGRADED, AuditLogger
 from api.services.usage_tracker import UsageTracker
 from shared.constants import TIER_STEP_LIMITS
 
@@ -174,15 +175,29 @@ async def _handle_checkout_completed(db: AsyncSession, data: dict) -> None:
         update(Account)
         .where(Account.stripe_customer_id == customer_id)
         .values(tier=new_tier, monthly_step_limit=new_limit)
+        .returning(Account.id)
     )
     result = await db.execute(stmt)
+    row = result.one_or_none()
+
+    if row:
+        await AuditLogger(db).log(
+            account_id=row[0],
+            actor_type="webhook",
+            actor_id="stripe",
+            action=TIER_UPGRADED,
+            resource_type="account",
+            resource_id=str(row[0]),
+            metadata={"new_tier": new_tier, "customer_id": customer_id},
+        )
+
     await db.commit()
 
     logger.info(
         "tier_upgraded",
         customer_id=customer_id,
         new_tier=new_tier,
-        rows_affected=result.rowcount,
+        rows_affected=1 if row else 0,
     )
 
 
@@ -199,14 +214,28 @@ async def _handle_subscription_deleted(db: AsyncSession, data: dict) -> None:
         update(Account)
         .where(Account.stripe_customer_id == customer_id)
         .values(tier="free", monthly_step_limit=free_limit)
+        .returning(Account.id)
     )
     result = await db.execute(stmt)
+    row = result.one_or_none()
+
+    if row:
+        await AuditLogger(db).log(
+            account_id=row[0],
+            actor_type="webhook",
+            actor_id="stripe",
+            action=TIER_DOWNGRADED,
+            resource_type="account",
+            resource_id=str(row[0]),
+            metadata={"customer_id": customer_id},
+        )
+
     await db.commit()
 
     logger.info(
         "tier_downgraded",
         customer_id=customer_id,
-        rows_affected=result.rowcount,
+        rows_affected=1 if row else 0,
     )
 
 
@@ -222,14 +251,10 @@ async def _handle_invoice_paid(db: AsyncSession, data: dict) -> None:
         .where(Account.stripe_customer_id == customer_id)
         .values(monthly_steps_used=0)
     )
-    result = await db.execute(stmt)
+    await db.execute(stmt)
     await db.commit()
 
-    logger.info(
-        "usage_reset",
-        customer_id=customer_id,
-        rows_affected=result.rowcount,
-    )
+    logger.info("usage_reset", customer_id=customer_id)
 
 
 # ---------------------------------------------------------------------------
