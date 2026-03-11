@@ -84,7 +84,7 @@ def _resolve_and_validate(hostname: str) -> list[str]:
 
     ips: list[str] = []
     for family, _type, _proto, _canonname, sockaddr in results:
-        ip_str = sockaddr[0]
+        ip_str: str = str(sockaddr[0])
         if ip_str not in ips:
             ips.append(ip_str)
 

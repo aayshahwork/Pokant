@@ -416,12 +416,15 @@ class TaskExecutor:
 
         elif tool_name == "inject_credentials":
             injector = CredentialInjector()
-            selectors = None
-            if tool_input.get("username_selector") or tool_input.get("password_selector"):
-                selectors = {
-                    "username_selector": tool_input.get("username_selector"),
-                    "password_selector": tool_input.get("password_selector"),
-                }
+            selectors: dict[str, str] | None = None
+            u_sel = tool_input.get("username_selector")
+            p_sel = tool_input.get("password_selector")
+            if u_sel or p_sel:
+                selectors = {}
+                if u_sel:
+                    selectors["username_selector"] = str(u_sel)
+                if p_sel:
+                    selectors["password_selector"] = str(p_sel)
             await injector.inject(page, self.config.credentials or {}, selectors=selectors)
             return "Credentials injected"
 

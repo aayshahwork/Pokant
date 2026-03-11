@@ -7,6 +7,7 @@ structured log output, even if a developer accidentally passes them to a logger.
 
 from __future__ import annotations
 
+from collections.abc import MutableMapping
 from typing import Any
 
 _SCRUB_KEYS = frozenset({
@@ -44,5 +45,5 @@ class CredentialScrubber:
         structlog.configure(processors=[..., CredentialScrubber(), ...])
     """
 
-    def __call__(self, logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+    def __call__(self, logger: Any, method_name: str, event_dict: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
         return _scrub_value(event_dict)
