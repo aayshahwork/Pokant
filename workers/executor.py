@@ -473,13 +473,13 @@ class TaskExecutor:
             captcha_type = await solver.detect_captcha(page)
             if captcha_type is None:
                 return ""
-            logger.info("captcha_auto_detected", type=captcha_type)
+            logger.info("captcha_auto_detected type=%s", captcha_type)
             result = await solver.solve(page, captcha_type)
             if result.solved:
                 return f"(auto-solved {result.captcha_type} captcha in {result.duration_ms}ms)"
             return f"(captcha detected: {result.captcha_type}, solve failed: {result.error})"
         except Exception as exc:
-            logger.warning("captcha_auto_detect_error", error=str(exc))
+            logger.warning("captcha_auto_detect_error error=%s", exc)
             return ""
 
     def _build_system_prompt(self, config: TaskConfig) -> str:

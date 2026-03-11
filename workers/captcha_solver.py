@@ -128,7 +128,7 @@ class CaptchaSolver:
                 )
 
             task_id = body["request"]
-            logger.info("2captcha_submitted", task_id=task_id, type=captcha_type)
+            logger.info("2captcha_submitted task_id=%s type=%s", task_id, captcha_type)
 
             # Poll for result
             token = await self._poll_result(session, task_id)
@@ -170,7 +170,7 @@ class CaptchaSolver:
             token,
         )
 
-        logger.info("captcha_solved", type=captcha_type, duration_ms=elapsed)
+        logger.info("captcha_solved type=%s duration_ms=%d", captcha_type, elapsed)
         return CaptchaResult(solved=True, captcha_type=captcha_type, token=token, duration_ms=elapsed)
 
     async def _solve_hcaptcha(self, page: Any) -> CaptchaResult:
@@ -218,7 +218,7 @@ class CaptchaSolver:
                 )
 
             task_id = body["request"]
-            logger.info("2captcha_submitted", task_id=task_id, type=captcha_type)
+            logger.info("2captcha_submitted task_id=%s type=%s", task_id, captcha_type)
 
             # Poll for result
             token = await self._poll_result(session, task_id)
@@ -248,7 +248,7 @@ class CaptchaSolver:
             token,
         )
 
-        logger.info("captcha_solved", type=captcha_type, duration_ms=elapsed)
+        logger.info("captcha_solved type=%s duration_ms=%d", captcha_type, elapsed)
         return CaptchaResult(solved=True, captcha_type=captcha_type, token=token, duration_ms=elapsed)
 
     async def _solve_turnstile(self, page: Any) -> CaptchaResult:
@@ -282,7 +282,7 @@ class CaptchaSolver:
             else:
                 await iframe_el.click()
         except Exception as exc:
-            logger.warning("turnstile_click_failed", error=str(exc))
+            logger.warning("turnstile_click_failed error=%s", exc)
 
         # Poll for success token (Turnstile sets a hidden input on success)
         poll_start = time.monotonic()
@@ -295,7 +295,7 @@ class CaptchaSolver:
             )
             if token:
                 elapsed = int((time.monotonic() - start) * 1000)
-                logger.info("captcha_solved", type=captcha_type, duration_ms=elapsed)
+                logger.info("captcha_solved type=%s duration_ms=%d", captcha_type, elapsed)
                 return CaptchaResult(solved=True, captcha_type=captcha_type, token=token, duration_ms=elapsed)
             await asyncio.sleep(1)
 
