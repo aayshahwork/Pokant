@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 
-class ComputerUseError(Exception):
+class ComputerUseSDKError(Exception):
     """Base exception for all computeruse SDK errors.
 
     All SDK-specific exceptions inherit from this class, so callers can
-    catch ``ComputerUseError`` to handle any SDK failure in one place.
+    catch ``ComputerUseSDKError`` to handle any SDK failure in one place.
     """
 
     def __init__(self, message: str = "An unexpected error occurred") -> None:
@@ -25,7 +25,11 @@ class ComputerUseError(Exception):
         return f"{type(self).__name__}(message={self.message!r})"
 
 
-class TaskExecutionError(ComputerUseError):
+# Backward-compatible alias
+ComputerUseError = ComputerUseSDKError
+
+
+class TaskExecutionError(ComputerUseSDKError):
     """Raised when a browser automation task fails during execution.
 
     This covers failures that occur after the task has started — for example
@@ -37,7 +41,7 @@ class TaskExecutionError(ComputerUseError):
         super().__init__(message)
 
 
-class BrowserError(ComputerUseError):
+class BrowserError(ComputerUseSDKError):
     """Raised when a browser-level operation fails.
 
     Examples include failure to launch the browser, inability to open a new
@@ -48,7 +52,7 @@ class BrowserError(ComputerUseError):
         super().__init__(message)
 
 
-class ValidationError(ComputerUseError):
+class ValidationError(ComputerUseSDKError):
     """Raised when the task output does not match the expected schema.
 
     Thrown by the validator after task completion when the extracted result
@@ -60,7 +64,7 @@ class ValidationError(ComputerUseError):
         super().__init__(message)
 
 
-class AuthenticationError(ComputerUseError):
+class AuthenticationError(ComputerUseSDKError):
     """Raised when login or credential injection fails.
 
     Thrown when the SDK detects that provided credentials were rejected by
@@ -72,20 +76,71 @@ class AuthenticationError(ComputerUseError):
         super().__init__(message)
 
 
-class TimeoutError(ComputerUseError):
+class TaskTimeoutError(ComputerUseSDKError):
     """Raised when a task exceeds its configured wall-clock timeout.
 
     Thrown when execution time surpasses ``TaskConfig.timeout_seconds``,
-    regardless of how many steps have been completed. Inherits from
-    ``ComputerUseError`` rather than the built-in ``TimeoutError`` so that
-    SDK consumers always deal with the SDK's own hierarchy.
+    regardless of how many steps have been completed.
     """
 
     def __init__(self, message: str = "Task exceeded the configured timeout") -> None:
         super().__init__(message)
 
 
-class RetryExhaustedError(ComputerUseError):
+# Backward-compatible alias
+TimeoutError = TaskTimeoutError
+
+
+class RateLimitError(ComputerUseSDKError):
+    """Raised when a rate limit is exceeded.
+
+    Carries ``retry_after_seconds`` so callers know how long to wait
+    before retrying.
+    """
+
+    def __init__(
+        self,
+        message: str = "Rate limit exceeded",
+        retry_after_seconds: Optional[float] = None,
+    ) -> None:
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(message)
+
+    def to_dict(self) -> Dict[str, Any]:
+        base = super().to_dict()
+        base["retry_after_seconds"] = self.retry_after_seconds
+        return base
+
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}(message={self.message!r}, "
+            f"retry_after_seconds={self.retry_after_seconds!r})"
+        )
+
+
+class NetworkError(ComputerUseSDKError):
+    """Raised when a network-level operation fails.
+
+    Covers connection errors, DNS resolution failures, and other transport
+    issues that prevent the SDK from reaching a remote service.
+    """
+
+    def __init__(self, message: str = "Network error occurred") -> None:
+        super().__init__(message)
+
+
+class ServiceUnavailableError(ComputerUseSDKError):
+    """Raised when a remote service is temporarily unavailable.
+
+    Typically corresponds to HTTP 503 responses or similar transient
+    service outages.
+    """
+
+    def __init__(self, message: str = "Service is temporarily unavailable") -> None:
+        super().__init__(message)
+
+
+class RetryExhaustedError(ComputerUseSDKError):
     """Raised when all retry attempts have been consumed without success.
 
     Thrown after the retry loop exhausts ``TaskConfig.retry_attempts``
@@ -113,7 +168,7 @@ class RetryExhaustedError(ComputerUseError):
         )
 
 
-class SessionError(ComputerUseError):
+class SessionError(ComputerUseSDKError):
     """Raised when browser session management fails.
 
     Covers errors during session save, load, restoration, or expiry — for
@@ -125,13 +180,11 @@ class SessionError(ComputerUseError):
         super().__init__(message)
 
 
-class APIError(ComputerUseError):
+class APIError(ComputerUseSDKError):
     """Raised when a cloud API call returns an error response.
 
     Carries the HTTP ``status_code`` and the raw ``response`` body so
     callers can inspect the upstream error without re-parsing it.
-    Typical sources include the Anthropic API, BrowserBase, or any other
-    third-party service the SDK communicates with.
     """
 
     def __init__(

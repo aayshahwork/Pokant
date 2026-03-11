@@ -11,7 +11,12 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from computeruse.config import settings
-from computeruse.exceptions import APIError, TaskExecutionError
+from computeruse.exceptions import (
+    APIError,
+    ComputerUseSDKError,
+    NetworkError,
+    TaskExecutionError,
+)
 from computeruse.executor import TaskExecutor
 from computeruse.models import TaskConfig, TaskResult
 from computeruse.retry import RetryHandler
@@ -30,13 +35,13 @@ _POLL_INTERVAL: float = 2.0
 # Hard ceiling (seconds) for cloud-task polling before giving up.
 _CLOUD_POLL_TIMEOUT: int = 600
 
+# Poll retry constants for transient network failures during polling.
+_MAX_POLL_RETRIES: int = 10
+_POLL_ERROR_BACKOFF: float = 5.0
+
 
 class ComputerUse:
     """One-line entry point for browser automation powered by Claude.
-
-    :class:`ComputerUse` wraps the full SDK pipeline behind a single
-    synchronous :meth:`run_task` call so it works in ordinary scripts,
-    Jupyter notebooks, and CLIs without any event-loop boilerplate.
 
     Two execution modes are supported:
 
@@ -58,43 +63,8 @@ class ComputerUse:
         )
         print(result.result["titles"])
 
-    Data extraction with typed schema::
-
-        result = cu.run_task(
-            url="https://finance.yahoo.com/quote/AAPL",
-            task="Get the current stock price and today's change percentage",
-            output_schema={
-                "price":      "float",
-                "change_pct": "float",
-                "currency":   "str",
-            },
-        )
-        data = result.result
-        print(f"AAPL: {data['currency']}{data['price']}  ({data['change_pct']:+.2f}%)")
-
-    Authenticated workflow (session is cached after first login)::
-
-        result = cu.run_task(
-            url="https://github.com/login",
-            task="Star the repo anthropics/anthropic-sdk-python",
-            credentials={"username": "alice", "password": "s3cr3t"},
-        )
-
-    Accessing all TaskResult fields::
-
-        if result.success:
-            print(result.result)          # extracted data dict
-            print(result.steps)           # number of browser actions
-            print(result.duration_ms)     # wall-clock time in ms
-            print(result.replay_path)     # local replay JSON path
-            print(result.task_id)         # unique run identifier
-        else:
-            print(result.error)           # human-readable failure reason
-            print(result.replay_path)     # replay still written on failure
-
     Attributes:
         model (str): Anthropic model ID used for this client instance.
-            Readable after construction, e.g. ``print(cu.model)``.
     """
 
     def __init__(
@@ -108,41 +78,21 @@ class ComputerUse:
         """Initialise the ComputerUse client.
 
         Args:
-            api_key:
-                API key for the hosted *computeruse* cloud service.
-                Only required when ``local=False``.  Not the same as
-                ``ANTHROPIC_API_KEY`` — that is read from the environment
-                automatically.
-            local:
-                ``True`` (default) — run tasks in a local Playwright browser.
-                ``False`` — dispatch tasks to the cloud API; requires
-                ``api_key``.
-            model:
-                Anthropic model ID for the Browser Use agent and structured
-                output extraction.  Defaults to ``settings.DEFAULT_MODEL``
-                (``"claude-sonnet-4-5"``).  Override per-client::
-
-                    cu = ComputerUse(model="claude-opus-4-5")
-                    print(cu.model)   # "claude-opus-4-5"
-
-            headless:
-                Run the browser without a visible window.  Set to ``False``
-                while developing to watch the agent work::
-
-                    cu = ComputerUse(headless=False)
-
-                Ignored in cloud mode.
-            browserbase_api_key:
-                BrowserBase API key for managed remote browsers in local
-                mode.  Falls back to ``settings.BROWSERBASE_API_KEY`` when
-                ``None``.
+            api_key: API key for the hosted cloud service.  Required when
+                ``local=False``.
+            local: ``True`` (default) — run tasks locally.
+                ``False`` — dispatch to the cloud API.
+            model: Anthropic model ID.
+            headless: Run the browser without a visible window.
+            browserbase_api_key: BrowserBase API key for managed remote
+                browsers in local mode.
 
         Raises:
             ValueError: If ``local=False`` and no ``api_key`` is provided.
         """
         self.api_key = api_key
         self.local = local
-        self.model = model          # publicly documented attribute
+        self.model = model
         self.headless = headless
         self.browserbase_api_key = browserbase_api_key or settings.BROWSERBASE_API_KEY
 
@@ -165,152 +115,39 @@ class ComputerUse:
         task: str,
         credentials: Optional[Dict[str, str]] = None,
         output_schema: Optional[Dict[str, str]] = None,
-        max_steps: int = settings.DEFAULT_MAX_STEPS,
-        timeout_seconds: int = settings.DEFAULT_TIMEOUT,
+        max_steps: int = 50,
+        timeout_seconds: int = 300,
         retry_attempts: int = 3,
         retry_delay_seconds: int = 2,
+        max_cost_cents: Optional[int] = None,
     ) -> TaskResult:
         """Run a browser automation task and block until it completes.
 
-        Constructs a :class:`TaskConfig`, dispatches execution (locally or to
-        the cloud), caches the :class:`TaskResult` to ``.tasks/``, and
-        returns it.  All parameters except ``url`` and ``task`` are optional.
+        Thin synchronous wrapper around :meth:`run_task_async`.  Safe to
+        call from scripts, CLIs, and Jupyter notebooks — handles the
+        event-loop gymnastics internally.
 
-        Args:
-            url:
-                Starting URL the browser should navigate to before the agent
-                starts working.  Must be a valid HTTPS (or HTTP) URL::
-
-                    url="https://news.ycombinator.com"
-
-            task:
-                Plain-English description of what the agent should do.
-                Be specific — include any page-interaction details::
-
-                    task="Click the 'Sign in' button and log in with the
-                          provided credentials, then navigate to Settings."
-
-            credentials:
-                Optional ``{"key": "value"}`` mapping of login credentials.
-                Common keys: ``"username"``, ``"password"``, ``"email"``.
-                When provided, the browser session is saved after completion
-                and automatically restored on the next call for the same
-                domain — the agent skips the login form entirely::
-
-                    credentials={"username": "alice", "password": "hunter2"}
-
-            output_schema:
-                Declares the structured fields to extract from the page and
-                their types.  Supported type strings:
-
-                * Scalars:        ``"str"``, ``"int"``, ``"float"``, ``"bool"``
-                * Collections:    ``"list"``, ``"dict"``
-                * Parameterised:  ``"list[str]"``, ``"list[int]"``,
-                                  ``"dict[str, int]"``, ``"dict[str, float]"``
-                * Nested:         ``"list[dict[str, str]]"``
-
-                Example::
-
-                    output_schema={
-                        "price":  "float",
-                        "tags":   "list[str]",
-                        "meta":   "dict[str, str]",
-                    }
-
-            max_steps:
-                Maximum number of browser actions (clicks, types, navigations)
-                the agent may take before the run is forcibly terminated.
-                Defaults to ``settings.DEFAULT_MAX_STEPS`` (50).
-
-            timeout_seconds:
-                Wall-clock timeout for the entire task in seconds.  The task
-                is terminated with :exc:`TimeoutError` if it exceeds this
-                limit regardless of how many steps have been taken.
-                Defaults to ``settings.DEFAULT_TIMEOUT`` (300).
-
-            retry_attempts:
-                Number of additional attempts on recoverable failures
-                (network errors, HTTP 429/5xx).  ``0`` means no retries.
-
-            retry_delay_seconds:
-                Base delay in seconds between retry attempts.  The actual
-                delay grows exponentially: ``delay = base * 2 ** attempt``,
-                capped at 30 s.
-
-        Returns:
-            A :class:`TaskResult` with the following fields:
-
-            * ``success`` (``bool``) — ``True`` if the task completed without error.
-            * ``result`` (``dict | None``) — extracted data matching
-              ``output_schema``; ``None`` when no schema was provided.
-            * ``error`` (``str | None``) — failure description when ``success=False``.
-            * ``steps`` (``int``) — total browser actions taken.
-            * ``duration_ms`` (``int``) — wall-clock duration in milliseconds.
-            * ``replay_path`` (``str | None``) — local path to the replay JSON.
-            * ``replay_url`` (``str | None``) — hosted replay URL (cloud mode).
-            * ``task_id`` (``str``) — unique UUID for this run.
-            * ``status`` (``str``) — ``"completed"`` or ``"failed"``.
-            * ``created_at`` / ``completed_at`` (``datetime``) — UTC timestamps.
-
-        Raises:
-            ValidationError:    If ``output_schema`` contains an invalid type
-                                string (caught at ``TaskConfig`` construction).
-            ComputerUseError:   Base class for any SDK-level failure.
-
-        Examples::
-
-            cu = ComputerUse()
-
-            # Stock price extraction
-            r = cu.run_task(
-                url="https://finance.yahoo.com/quote/AAPL",
-                task="Get the current stock price",
-                output_schema={"price": "float", "currency": "str"},
-            )
-            if r.success:
-                print(r.result["price"])
-
-            # Form submission with error handling
-            r = cu.run_task(
-                url="https://example.com/contact",
-                task="Fill and submit the contact form with name 'Alice'",
-                output_schema={"submitted": "bool", "message": "str"},
-                max_steps=20,
-            )
-            if not r.success:
-                print(f"Failed after {r.steps} steps: {r.error}")
-                print(f"Replay: {r.replay_path}")
+        See :meth:`run_task_async` for full parameter documentation.
         """
-        config = TaskConfig(
-            url=url,
-            task=task,
-            credentials=credentials,
-            output_schema=output_schema,
-            max_steps=max_steps,
-            timeout_seconds=timeout_seconds,
-            retry_attempts=retry_attempts,
-            retry_delay_seconds=retry_delay_seconds,
+        return _run_sync(
+            self.run_task_async(
+                url=url,
+                task=task,
+                credentials=credentials,
+                output_schema=output_schema,
+                max_steps=max_steps,
+                timeout_seconds=timeout_seconds,
+                retry_attempts=retry_attempts,
+                retry_delay_seconds=retry_delay_seconds,
+                max_cost_cents=max_cost_cents,
+            )
         )
-
-        result = _run_sync(self._run_task_async(config))
-        self._cache_result(result)
-        return result
 
     def get_task(self, task_id: str) -> TaskResult:
         """Retrieve a previously executed task by its ID.
 
         Checks the local ``.tasks/`` cache first; falls back to the cloud API
         when ``local=False`` and the task is not cached locally.
-
-        Args:
-            task_id:
-                The ``task_id`` value from a previous :class:`TaskResult`::
-
-                    result = cu.run_task(…)
-                    same   = cu.get_task(result.task_id)
-
-        Returns:
-            The matching :class:`TaskResult`.
 
         Raises:
             KeyError:  If the task is not found locally or in the cloud.
@@ -327,45 +164,119 @@ class ComputerUse:
             f"No task with id {task_id!r} found in local storage ({_TASK_STORE})"
         )
 
-    def list_tasks(self, limit: int = 10) -> List[TaskResult]:
+    def list_tasks(
+        self, limit: int = 10, status: Optional[str] = None
+    ) -> List[TaskResult]:
         """Return the most recent task results, newest first.
 
-        In local mode reads from the ``.tasks/`` cache sorted by file
-        modification time.  In cloud mode fetches from the API
-        (``GET /api/v1/tasks?limit=…``).
-
         Args:
-            limit: Maximum number of results to return.  Must be ≥ 1.
-
-        Returns:
-            List of :class:`TaskResult` objects ordered newest-first.
-            May be shorter than *limit* if fewer tasks exist.
-
-        Example::
-
-            for task in cu.list_tasks(limit=5):
-                print(task.task_id, task.status, task.duration_ms)
+            limit: Maximum number of results to return.
+            status: Optional status filter (e.g. ``"completed"``, ``"failed"``).
         """
         if self.local:
-            return self._list_cached_results(limit)
-        return _run_sync(self._list_cloud_tasks(limit))
+            results = self._list_cached_results(limit)
+            if status:
+                results = [r for r in results if r.status == status]
+            return results
+        return _run_sync(self._list_cloud_tasks(limit, status))
+
+    def get_replay(self, task_id: str) -> str:
+        """Return the replay path (local) or URL (cloud) for a task.
+
+        Args:
+            task_id: The task ID from a previous :class:`TaskResult`.
+
+        Returns:
+            Local mode: filesystem path to the replay HTML file.
+            Cloud mode: pre-signed URL for the replay recording.
+
+        Raises:
+            FileNotFoundError: If the local replay file does not exist.
+            NetworkError: If a cloud API connection fails.
+            ComputerUseSDKError: If the cloud API returns 404.
+        """
+        if self.local:
+            path = Path.home() / ".computeruse" / "replays" / f"{task_id}.html"
+            if not path.exists():
+                raise FileNotFoundError(f"No replay found at {path}")
+            return str(path)
+
+        return _run_sync(self._fetch_cloud_replay(task_id))
+
+    # ------------------------------------------------------------------
+    # Public async API
+    # ------------------------------------------------------------------
+
+    async def run_task_async(
+        self,
+        url: str,
+        task: str,
+        credentials: Optional[Dict[str, str]] = None,
+        output_schema: Optional[Dict[str, str]] = None,
+        max_steps: int = 50,
+        timeout_seconds: int = 300,
+        retry_attempts: int = 3,
+        retry_delay_seconds: int = 2,
+        max_cost_cents: Optional[int] = None,
+    ) -> TaskResult:
+        """Run a browser automation task asynchronously.
+
+        This is the primary implementation.  :meth:`run_task` delegates here.
+
+        Args:
+            url: Starting URL the browser navigates to.
+            task: Plain-English description of what the agent should do.
+            credentials: Optional login credentials.
+            output_schema: Declares structured fields to extract.
+            max_steps: Maximum browser actions (default 50).
+            timeout_seconds: Wall-clock timeout (default 300).
+            retry_attempts: Retries on recoverable failures (default 3).
+            retry_delay_seconds: Base delay between retries (default 2).
+            max_cost_cents: Optional cost limit for the task.
+
+        Returns:
+            A :class:`TaskResult` with outcome, extracted data, and metadata.
+
+        Raises:
+            ValueError: If ``url`` is empty, ``task`` exceeds 2000 chars,
+                or ``output_schema`` contains unsupported types.
+        """
+        if not url or not url.strip():
+            raise ValueError("url must not be empty")
+        if len(task) > 2000:
+            raise ValueError("task must be 2000 characters or fewer")
+
+        # Deferred API-key check: raise on first LLM call, not __init__.
+        # Checked here (before the retry handler) because EnvironmentError
+        # is an alias for OSError, which the retry handler treats as retryable.
+        if self.local and not settings.ANTHROPIC_API_KEY:
+            raise EnvironmentError(
+                "ANTHROPIC_API_KEY is not set. Set it in your environment "
+                "or .env file before running tasks in local mode."
+            )
+
+        config = TaskConfig(
+            url=url,
+            task=task,
+            credentials=credentials,
+            output_schema=output_schema,
+            max_steps=max_steps,
+            timeout_seconds=timeout_seconds,
+            retry_attempts=retry_attempts,
+            retry_delay_seconds=retry_delay_seconds,
+            max_cost_cents=max_cost_cents,
+        )
+
+        result = await self._dispatch(config)
+        self._cache_result(result)
+        return result
 
     # ------------------------------------------------------------------
     # Private: async execution layer
     # ------------------------------------------------------------------
 
-    async def _run_task_async(self, config: TaskConfig) -> TaskResult:
-        """Async core of :meth:`run_task`.
-
-        Wraps the chosen backend (local executor or cloud API) in a
-        :class:`RetryHandler` configured from *config*.
-
-        Args:
-            config: Fully validated :class:`TaskConfig`.
-
-        Returns:
-            :class:`TaskResult` from the backend.
-        """
+    async def _dispatch(self, config: TaskConfig) -> TaskResult:
+        """Dispatch *config* through the retry handler to the appropriate backend."""
         handler = RetryHandler(
             max_attempts=config.retry_attempts,
             base_delay=float(config.retry_delay_seconds),
@@ -379,14 +290,7 @@ class ComputerUse:
         """Instantiate a fresh :class:`TaskExecutor` and run *config* locally.
 
         A new executor is created on every call so that per-run state
-        (``steps`` list, screenshot directory) is always clean, making
-        concurrent ``run_task`` calls safe.
-
-        Args:
-            config: Task configuration.
-
-        Returns:
-            :class:`TaskResult` from :meth:`TaskExecutor.execute`.
+        is always clean, making concurrent ``run_task`` calls safe.
         """
         executor = TaskExecutor(
             model=self.model,
@@ -398,40 +302,39 @@ class ComputerUse:
     async def _call_cloud_api(self, config: TaskConfig) -> TaskResult:
         """Submit *config* to the hosted cloud service and poll for completion.
 
-        Flow:
-
-        1. ``POST /api/v1/tasks`` — submits the task, receives a ``task_id``.
-        2. ``GET  /api/v1/tasks/{task_id}`` — polled every
-           :data:`_POLL_INTERVAL` seconds until status is ``"completed"`` or
-           ``"failed"``, or :data:`_CLOUD_POLL_TIMEOUT` seconds elapse.
-
-        Args:
-            config: Task configuration to submit.
-
-        Returns:
-            :class:`TaskResult` built from the final poll response.
+        On transient network errors during polling, retries up to
+        ``_MAX_POLL_RETRIES`` times with ``_POLL_ERROR_BACKOFF`` seconds
+        between attempts.
 
         Raises:
             APIError:           On any non-2xx HTTP response.
-            TaskExecutionError: If the task does not finish within
-                                :data:`_CLOUD_POLL_TIMEOUT` seconds.
+            NetworkError:       If polling fails after all retries.
+            TaskExecutionError: If the task does not finish within the timeout.
         """
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
         payload: Dict[str, Any] = {
-            "url":              config.url,
-            "task":             config.task,
-            "max_steps":        config.max_steps,
-            "timeout_seconds":  config.timeout_seconds,
-            "retry_attempts":   config.retry_attempts,
+            "url": config.url,
+            "task": config.task,
+            "max_steps": config.max_steps,
+            "timeout_seconds": config.timeout_seconds,
+            "retry_attempts": config.retry_attempts,
             "retry_delay_seconds": config.retry_delay_seconds,
         }
         if config.credentials:
             payload["credentials"] = config.credentials
         if config.output_schema:
             payload["output_schema"] = config.output_schema
+        if config.max_cost_cents is not None:
+            payload["max_cost_cents"] = config.max_cost_cents
+        if config.session_id:
+            payload["session_id"] = config.session_id
+        if config.idempotency_key:
+            payload["idempotency_key"] = config.idempotency_key
+        if config.webhook_url:
+            payload["webhook_url"] = config.webhook_url
 
         async with httpx.AsyncClient(timeout=30) as client:
             submit = await client.post(
@@ -442,18 +345,38 @@ class ComputerUse:
             logger.info("Cloud task submitted: %s", task_id)
 
             deadline = time.monotonic() + _CLOUD_POLL_TIMEOUT
+            poll_errors = 0
+
             while time.monotonic() < deadline:
                 await asyncio.sleep(_POLL_INTERVAL)
-                poll = await client.get(
-                    f"{_CLOUD_API_BASE}/tasks/{task_id}", headers=headers
-                )
-                _raise_for_status(poll)
-                poll_data: Dict[str, Any] = poll.json()
-                status: str = poll_data.get("status", "")
-                logger.debug("Cloud task %s → %s", task_id, status)
+                try:
+                    poll = await client.get(
+                        f"{_CLOUD_API_BASE}/tasks/{task_id}", headers=headers
+                    )
+                    _raise_for_status(poll)
+                    poll_errors = 0  # reset on success
+                    poll_data: Dict[str, Any] = poll.json()
+                    status: str = poll_data.get("status", "")
+                    logger.debug("Cloud task %s → %s", task_id, status)
 
-                if status in ("completed", "failed"):
-                    return _parse_cloud_result(poll_data)
+                    if status in ("completed", "failed", "timeout", "cancelled"):
+                        return _parse_cloud_result(poll_data)
+
+                except (httpx.NetworkError, httpx.TimeoutException) as exc:
+                    poll_errors += 1
+                    if poll_errors >= _MAX_POLL_RETRIES:
+                        raise NetworkError(
+                            f"Lost connection to cloud API after "
+                            f"{_MAX_POLL_RETRIES} poll retry attempts: {exc}"
+                        ) from exc
+                    logger.warning(
+                        "Poll error %d/%d: %s. Retrying in %.0fs...",
+                        poll_errors,
+                        _MAX_POLL_RETRIES,
+                        exc,
+                        _POLL_ERROR_BACKOFF,
+                    )
+                    await asyncio.sleep(_POLL_ERROR_BACKOFF)
 
         raise TaskExecutionError(
             f"Cloud task {task_id!r} did not reach a terminal state within "
@@ -463,12 +386,6 @@ class ComputerUse:
 
     async def _fetch_cloud_task(self, task_id: str) -> TaskResult:
         """Fetch one task from the cloud API by ID.
-
-        Args:
-            task_id: Task to retrieve.
-
-        Returns:
-            :class:`TaskResult` from the API response.
 
         Raises:
             KeyError:  On HTTP 404.
@@ -484,42 +401,63 @@ class ComputerUse:
         _raise_for_status(response)
         return _parse_cloud_result(response.json())
 
-    async def _list_cloud_tasks(self, limit: int) -> List[TaskResult]:
+    async def _list_cloud_tasks(
+        self, limit: int, status: Optional[str] = None
+    ) -> List[TaskResult]:
         """Fetch recent tasks from the cloud API.
-
-        Args:
-            limit: Maximum number of results to return.
-
-        Returns:
-            List of :class:`TaskResult`, newest-first.
 
         Raises:
             APIError: If the HTTP request fails.
         """
         headers = {"Authorization": f"Bearer {self.api_key}"}
+        params: Dict[str, Any] = {"limit": limit}
+        if status:
+            params["status"] = status
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(
                 f"{_CLOUD_API_BASE}/tasks",
                 headers=headers,
-                params={"limit": limit},
+                params=params,
             )
         _raise_for_status(response)
         items: List[Dict[str, Any]] = response.json().get("tasks", [])
         return [_parse_cloud_result(item) for item in items]
+
+    async def _fetch_cloud_replay(self, task_id: str) -> str:
+        """Fetch the replay URL for a cloud task.
+
+        Raises:
+            ComputerUseSDKError: On HTTP 404.
+            NetworkError: On connection failure.
+        """
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.get(
+                    f"{_CLOUD_API_BASE}/tasks/{task_id}/replay",
+                    headers=headers,
+                )
+        except (httpx.NetworkError, httpx.TimeoutException) as exc:
+            raise NetworkError(
+                f"Failed to fetch replay for task {task_id!r}: {exc}"
+            ) from exc
+
+        if response.status_code == 404:
+            raise ComputerUseSDKError(
+                f"No replay found for cloud task {task_id!r}"
+            )
+        _raise_for_status(response)
+        return response.json().get("replay_url", "")
 
     # ------------------------------------------------------------------
     # Private: local task cache
     # ------------------------------------------------------------------
 
     def _cache_result(self, result: TaskResult) -> None:
-        """Write *result* to ``.tasks/<task_id>.json``.
-
-        Failures are logged as warnings — a cache write error must never
-        surface to the caller.
-        """
+        """Write *result* to ``.tasks/<task_id>.json``."""
         path = _TASK_STORE / f"{result.task_id}.json"
         try:
-            path.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+            path.write_text(result.to_json(indent=2), encoding="utf-8")
         except OSError as exc:
             logger.warning("Could not cache task result %s: %s", result.task_id, exc)
 
@@ -529,7 +467,7 @@ class ComputerUse:
         if not path.exists():
             return None
         try:
-            return TaskResult.model_validate_json(path.read_text(encoding="utf-8"))
+            return TaskResult.from_json(path.read_text(encoding="utf-8"))
         except Exception as exc:
             logger.warning("Corrupt cache file %s: %s", path, exc)
             return None
@@ -545,7 +483,7 @@ class ComputerUse:
         for path in files[:limit]:
             try:
                 results.append(
-                    TaskResult.model_validate_json(path.read_text(encoding="utf-8"))
+                    TaskResult.from_json(path.read_text(encoding="utf-8"))
                 )
             except Exception as exc:
                 logger.warning("Skipping corrupt cache file %s: %s", path, exc)
@@ -566,14 +504,7 @@ def _run_sync(coro: Any) -> Any:
     * **Loop already running** (Jupyter, async frameworks) — spawns a
       :class:`~concurrent.futures.ThreadPoolExecutor` worker that runs its
       own :func:`asyncio.run` and blocks the calling thread via
-      ``future.result()``.  This avoids the ``RuntimeError: This event
-      loop is already running`` that a direct ``asyncio.run()`` would raise.
-
-    Args:
-        coro: Awaitable coroutine to run.
-
-    Returns:
-        Whatever the coroutine returns.
+      ``future.result()``.
     """
     try:
         asyncio.get_running_loop()
@@ -587,17 +518,7 @@ def _run_sync(coro: Any) -> Any:
 
 
 def _raise_for_status(response: httpx.Response) -> None:
-    """Raise :class:`APIError` for any non-2xx *response*.
-
-    Includes the parsed JSON body (or raw text) in the exception so callers
-    get actionable detail without having to re-read the response.
-
-    Args:
-        response: :class:`httpx.Response` to inspect.
-
-    Raises:
-        APIError: If ``response.is_success`` is ``False``.
-    """
+    """Raise :class:`APIError` for any non-2xx *response*."""
     if response.is_success:
         return
     try:
@@ -612,18 +533,8 @@ def _raise_for_status(response: httpx.Response) -> None:
 
 
 def _parse_cloud_result(data: Dict[str, Any]) -> TaskResult:
-    """Convert a raw cloud API response dict into a :class:`TaskResult`.
+    """Convert a raw cloud API response dict into a :class:`TaskResult`."""
 
-    Parses ISO-8601 timestamp strings into :class:`datetime` objects and
-    provides safe defaults for every optional field so the function never
-    raises even when the API returns a partial response.
-
-    Args:
-        data: Decoded JSON body from a ``GET /api/v1/tasks/{id}`` response.
-
-    Returns:
-        A fully populated :class:`TaskResult`.
-    """
     def _dt(val: Optional[str]) -> Optional[datetime]:
         if not val:
             return None

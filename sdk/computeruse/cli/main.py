@@ -191,7 +191,7 @@ def run(
     # ── Save output file ─────────────────────────────────────────────────────
     output_path = Path(output)
     try:
-        payload = json.loads(result.model_dump_json())
+        payload = result.to_dict()
         output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         console.print(f"\n[dim]Full result saved to[/dim] [green]{output_path}[/green]")
     except OSError as exc:

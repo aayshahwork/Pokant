@@ -50,8 +50,8 @@ class Settings(BaseSettings):
     # Required                                                             #
     # ------------------------------------------------------------------ #
 
-    ANTHROPIC_API_KEY: str = Field(
-        ...,
+    ANTHROPIC_API_KEY: Optional[str] = Field(
+        default=None,
         description=(
             "Anthropic API key used for all model calls. "
             "Obtain yours at https://console.anthropic.com/settings/keys"
@@ -167,21 +167,25 @@ class Settings(BaseSettings):
 
     @field_validator("ANTHROPIC_API_KEY")
     @classmethod
-    def anthropic_key_must_not_be_placeholder(cls, v: str) -> str:
+    def anthropic_key_must_not_be_placeholder(cls, v: Optional[str]) -> Optional[str]:
         """Reject placeholder values that slip through from .env.example.
 
         Catches common copy-paste mistakes where the developer copies
         ``.env.example`` but forgets to replace the placeholder strings.
+        Returns ``None`` unchanged to support deferred validation (the key
+        is checked at the first LLM call, not at import time).
 
         Args:
             v: The raw value of ``ANTHROPIC_API_KEY``.
 
         Returns:
-            The key unchanged when it looks like a real value.
+            The key unchanged when it looks like a real value, or ``None``.
 
         Raises:
-            ValueError: If the key is empty or a known placeholder string.
+            ValueError: If the key is a known placeholder string.
         """
+        if v is None:
+            return v
         placeholders = {"your_key_here", "", "none", "null", "sk-ant-placeholder"}
         if v.strip().lower() in placeholders:
             raise ValueError(

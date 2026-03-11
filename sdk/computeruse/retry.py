@@ -9,8 +9,11 @@ from rich.console import Console
 from computeruse.exceptions import (
     APIError,
     AuthenticationError,
+    NetworkError,
+    RateLimitError,
     RetryExhaustedError,
-    TimeoutError,
+    ServiceUnavailableError,
+    TaskTimeoutError,
     ValidationError,
 )
 
@@ -159,7 +162,11 @@ class RetryHandler:
             return False
 
         # SDK timeout is always retryable
-        if isinstance(error, TimeoutError):
+        if isinstance(error, TaskTimeoutError):
+            return True
+
+        # Rate limit, network, and service unavailable are always retryable
+        if isinstance(error, (RateLimitError, NetworkError, ServiceUnavailableError)):
             return True
 
         # asyncio internal timeout
@@ -221,7 +228,7 @@ class RetryHandler:
                 timeout=float(timeout_seconds),
             )
         except asyncio.TimeoutError:
-            raise TimeoutError(
+            raise TaskTimeoutError(
                 f"'{func.__name__}' exceeded the {timeout_seconds}s timeout"
             )
 

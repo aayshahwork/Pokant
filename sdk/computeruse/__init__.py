@@ -20,13 +20,18 @@ from computeruse.exceptions import (
     AuthenticationError,
     BrowserError,
     ComputerUseError,
+    ComputerUseSDKError,
+    NetworkError,
+    RateLimitError,
     RetryExhaustedError,
+    ServiceUnavailableError,
     SessionError,
     TaskExecutionError,
+    TaskTimeoutError,
     TimeoutError,
     ValidationError,
 )
-from computeruse.models import SessionData, StepData, TaskConfig, TaskResult
+from computeruse.models import TaskConfig, TaskResult
 
 __version__ = "0.1.0"
 
@@ -36,18 +41,22 @@ __all__ = [
     # Models
     "TaskConfig",
     "TaskResult",
-    "StepData",
-    "SessionData",
-    # Exceptions
-    "ComputerUseError",
+    # Exceptions (primary names)
+    "ComputerUseSDKError",
     "TaskExecutionError",
     "BrowserError",
     "ValidationError",
     "AuthenticationError",
-    "TimeoutError",
+    "TaskTimeoutError",
+    "RateLimitError",
+    "NetworkError",
+    "ServiceUnavailableError",
     "RetryExhaustedError",
     "SessionError",
     "APIError",
+    # Backward-compatible aliases
+    "ComputerUseError",
+    "TimeoutError",
     # Metadata
     "__version__",
 ]

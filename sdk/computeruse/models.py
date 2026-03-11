@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import re
+from dataclasses import asdict, dataclass, fields as dc_fields
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
@@ -103,226 +105,140 @@ def _split_top_level(s: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Models
+# Dataclass models (public API)
 # ---------------------------------------------------------------------------
 
 
-class TaskConfig(BaseModel):
+def _pydantic_aware_dict_factory(items: list[tuple[str, Any]]) -> Dict[str, Any]:
+    """Dict factory for :func:`dataclasses.asdict` that handles Pydantic models.
+
+    If any value is a Pydantic ``BaseModel``, it is serialised via
+    ``.model_dump()`` so the result is always plain dicts/lists/primitives.
+    """
+    result: Dict[str, Any] = {}
+    for key, value in items:
+        if isinstance(value, BaseModel):
+            result[key] = value.model_dump()
+        elif isinstance(value, list):
+            result[key] = [
+                v.model_dump() if isinstance(v, BaseModel) else v for v in value
+            ]
+        else:
+            result[key] = value
+    return result
+
+
+@dataclass
+class TaskConfig:
     """Configuration for a single browser automation task.
 
     Passed to :meth:`ComputerUse.run_task` (or :class:`TaskExecutor` directly)
     to describe what the agent should do, how it should authenticate, what
     structured data to return, and how hard to try before giving up.
-
-    Basic example::
-
-        config = TaskConfig(
-            url="https://news.ycombinator.com",
-            task="Return the titles of the top 5 posts",
-            output_schema={"titles": "list[str]"},
-        )
-
-    With credentials and retries::
-
-        config = TaskConfig(
-            url="https://github.com/login",
-            task="Star the repo anthropics/anthropic-sdk-python",
-            credentials={"username": "alice", "password": "s3cr3t"},
-            max_steps=20,
-            retry_attempts=2,
-        )
-
-    Supported ``output_schema`` type strings
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Scalar:         ``"str"``, ``"int"``, ``"float"``, ``"bool"``
-    Collections:    ``"list"``, ``"dict"``
-    Parameterised:  ``"list[str]"``, ``"list[int]"``, ``"list[float]"``
-                    ``"dict[str, int]"``, ``"dict[str, float]"``
-                    ``"dict[str, str]"``
-    Nested:         ``"list[dict[str, str]]"``
-                    ``"dict[str, list[int]]"``
     """
 
-    url: str = Field(
-        ...,
-        description="The starting URL the browser should navigate to before executing the task",
-    )
-    task: str = Field(
-        ...,
-        min_length=1,
-        description="Natural-language description of what the agent should do",
-    )
-    credentials: Optional[Dict[str, str]] = Field(
-        default=None,
-        description=(
-            "Key/value credentials injected into the task prompt "
-            "(e.g. {'username': 'alice', 'password': 's3cr3t'}). "
-            "When provided the session is saved after completion and "
-            "restored on the next run for the same domain."
-        ),
-    )
-    output_schema: Optional[Dict[str, str]] = Field(
-        default=None,
-        description=(
-            "Declares the fields to extract from the page and their types. "
-            "Keys are field names; values are type strings such as "
-            "'str', 'int', 'float', 'bool', 'list[str]', 'dict[str, int]'. "
-            "Nested parameterised types are supported, e.g. 'list[dict[str, str]]'."
-        ),
-        examples=[
-            {"price": "float", "currency": "str"},
-            {"titles": "list[str]", "top_score": "int"},
-            {"items": "list[dict[str, str]]"},
-        ],
-    )
-    max_steps: int = Field(
-        default=50,
-        ge=1,
-        description="Maximum number of browser actions the agent may take before the run is aborted",
-    )
-    timeout_seconds: int = Field(
-        default=300,
-        ge=1,
-        description="Wall-clock timeout in seconds for the entire task",
-    )
-    retry_attempts: int = Field(
-        default=3,
-        ge=0,
-        description="Number of additional attempts on recoverable failures (0 = no retries)",
-    )
-    retry_delay_seconds: int = Field(
-        default=2,
-        ge=0,
-        description="Base delay in seconds between retry attempts; grows exponentially",
-    )
+    url: str
+    task: str
+    credentials: Optional[Dict[str, str]] = None
+    output_schema: Optional[Dict[str, str]] = None
+    max_steps: int = 50
+    timeout_seconds: int = 300
+    retry_attempts: int = 3
+    retry_delay_seconds: int = 2
+    max_cost_cents: Optional[int] = None
+    session_id: Optional[str] = None
+    idempotency_key: Optional[str] = None
+    webhook_url: Optional[str] = None
 
-    @field_validator("output_schema")
-    @classmethod
-    def validate_schema_types(
-        cls, schema: Optional[Dict[str, str]]
-    ) -> Optional[Dict[str, str]]:
-        """Validate every type string in *output_schema* at construction time.
-
-        Catching invalid type strings here (rather than at extraction time)
-        produces a clear ``ValidationError`` with the offending field name
-        immediately when the config is built, not mid-task.
-
-        Args:
-            schema: The raw ``output_schema`` value.
-
-        Returns:
-            The schema unchanged if all type strings are valid.
-
-        Raises:
-            ValueError: If any value is not a recognised type expression.
-
-        Examples::
-
-            # Valid
-            TaskConfig(url="…", task="…", output_schema={"price": "float"})
-            TaskConfig(url="…", task="…", output_schema={"tags": "list[str]"})
-            TaskConfig(url="…", task="…",
-                       output_schema={"items": "list[dict[str, str]]"})
-
-            # Invalid — raises ValidationError
-            TaskConfig(url="…", task="…", output_schema={"x": "uuid"})
-            TaskConfig(url="…", task="…", output_schema={"x": "List[str]"})  # wrong syntax
-        """
-        if schema is None:
-            return schema
-
-        invalid: list[str] = []
-        for field_name, type_str in schema.items():
-            if not isinstance(type_str, str) or not _validate_type_string(type_str):
-                invalid.append(f"'{field_name}': '{type_str}'")
-
-        if invalid:
-            raise ValueError(
-                f"output_schema contains invalid type expression(s): "
-                f"{', '.join(invalid)}. "
-                f"Supported types: str, int, float, bool, list, dict, "
-                f"list[T], dict[str, T], and nested variants thereof."
-            )
-
-        return schema
+    def __post_init__(self) -> None:
+        if not self.url or not self.url.strip():
+            raise ValueError("url must not be empty")
+        if not self.task or len(self.task) < 1:
+            raise ValueError("task must not be empty")
+        if len(self.task) > 2000:
+            raise ValueError("task must be 2000 characters or fewer")
+        if self.max_steps < 1:
+            raise ValueError("max_steps must be >= 1")
+        if self.timeout_seconds < 1:
+            raise ValueError("timeout_seconds must be >= 1")
+        if self.retry_attempts < 0:
+            raise ValueError("retry_attempts must be >= 0")
+        if self.max_cost_cents is not None and self.max_cost_cents <= 0:
+            raise ValueError("max_cost_cents must be > 0 when provided")
+        if self.output_schema:
+            invalid: list[str] = []
+            for field_name, type_str in self.output_schema.items():
+                if not isinstance(type_str, str) or not _validate_type_string(type_str):
+                    invalid.append(f"'{field_name}': '{type_str}'")
+            if invalid:
+                raise ValueError(
+                    f"output_schema contains invalid type expression(s): "
+                    f"{', '.join(invalid)}. "
+                    f"Supported types: str, int, float, bool, list, dict, "
+                    f"list[T], dict[str, T], and nested variants thereof."
+                )
 
 
-class TaskResult(BaseModel):
+@dataclass
+class TaskResult:
     """Result returned after a task completes, fails, or is still in progress.
 
     Captures the final outcome including extracted data, error details,
     optional replay artifacts, and timing metadata.
-
-    Checking the result::
-
-        result = cu.run_task(url="…", task="…", output_schema={"price": "float"})
-
-        if result.success:
-            print(result.result["price"])       # float, already coerced
-            print(f"Done in {result.duration_ms}ms over {result.steps} steps")
-        else:
-            print(f"Failed: {result.error}")
-            # Inspect the replay for a step-by-step trace:
-            print(result.replay_path)
-
-    Status lifecycle::
-
-        "pending"   → task queued, not yet started
-        "running"   → agent is actively executing
-        "completed" → agent finished (check success for outcome)
-        "failed"    → unrecoverable error (see error field)
     """
 
-    task_id: str = Field(
-        ...,
-        description="Unique identifier (UUID4) for this task run",
-    )
-    status: Literal["pending", "running", "completed", "failed"] = Field(
-        ...,
-        description="Current lifecycle status of the task",
-    )
-    success: bool = Field(
-        ...,
-        description="True if the task completed without error and output validation passed",
-    )
-    result: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description=(
-            "Extracted and type-validated output data. "
-            "Shaped according to TaskConfig.output_schema when provided; "
-            "None when no schema was given or the task failed."
-        ),
-    )
-    error: Optional[str] = Field(
-        default=None,
-        description="Human-readable error description when success=False",
-    )
-    replay_url: Optional[str] = Field(
-        default=None,
-        description="Remote HTTPS URL to the session replay (cloud execution only)",
-    )
-    replay_path: Optional[str] = Field(
-        default=None,
-        description="Local filesystem path to the replay JSON file",
-    )
-    steps: int = Field(
-        default=0,
-        ge=0,
-        description="Total number of browser actions taken during execution",
-    )
-    duration_ms: int = Field(
-        default=0,
-        ge=0,
-        description="Total wall-clock duration from task start to terminal state, in milliseconds",
-    )
-    created_at: datetime = Field(
-        ...,
-        description="UTC timestamp when the task was created / queued",
-    )
-    completed_at: Optional[datetime] = Field(
-        default=None,
-        description="UTC timestamp when the task reached a terminal state (completed or failed)",
-    )
+    task_id: str
+    status: str
+    success: bool
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    replay_url: Optional[str] = None
+    replay_path: Optional[str] = None
+    steps: int = 0
+    duration_ms: int = 0
+    created_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-compatible dict.
+
+        Uses a Pydantic-aware dict factory so nested ``BaseModel`` instances
+        (if any) are serialised via ``.model_dump()``.
+        """
+        d = asdict(self, dict_factory=_pydantic_aware_dict_factory)
+        for key in ("created_at", "completed_at"):
+            val = d.get(key)
+            if isinstance(val, datetime):
+                d[key] = val.isoformat()
+        return d
+
+    def to_json(self, indent: Optional[int] = None) -> str:
+        """Serialize to a JSON string."""
+        return json.dumps(self.to_dict(), default=str, indent=indent)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> TaskResult:
+        """Deserialize from a dict (with ISO datetime strings)."""
+        data = dict(data)  # shallow copy to avoid mutating caller's dict
+        for key in ("created_at", "completed_at"):
+            val = data.get(key)
+            if isinstance(val, str):
+                try:
+                    data[key] = datetime.fromisoformat(val)
+                except ValueError:
+                    data[key] = None
+        known = {f.name for f in dc_fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+    @classmethod
+    def from_json(cls, text: str) -> TaskResult:
+        """Deserialize from a JSON string."""
+        return cls.from_dict(json.loads(text))
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models (internal SDK use only)
+# ---------------------------------------------------------------------------
 
 
 class StepData(BaseModel):
@@ -332,17 +248,6 @@ class StepData(BaseModel):
     ``StepData`` record.  The ordered list of records on a completed
     :class:`TaskResult` forms a full execution trace that can be replayed
     or inspected for debugging.
-
-    Example::
-
-        step = StepData(
-            step_number=3,
-            action_type="click",
-            description="Clicked the 'Sign in' button",
-            screenshot_path="replays/screenshots/step_0003.png",
-            success=True,
-            timestamp=datetime.now(timezone.utc),
-        )
     """
 
     step_number: int = Field(
@@ -393,21 +298,6 @@ class SessionData(BaseModel):
     can be restored across task runs without re-logging in.  Managed
     automatically by :class:`SessionManager` when ``credentials`` are
     passed to :meth:`ComputerUse.run_task`.
-
-    Example (manual construction for testing)::
-
-        session = SessionData(
-            domain="https://github.com",
-            cookies=[{"name": "user_session", "value": "abc123", "domain": ".github.com"}],
-            local_storage={"theme": "dark"},
-            session_storage={},
-            created_at=datetime.now(timezone.utc),
-        )
-
-    Expiry::
-
-        if session.expires_at and datetime.now(timezone.utc) > session.expires_at:
-            session_manager.delete_session(session.domain)
     """
 
     domain: str = Field(
