@@ -71,6 +71,9 @@ def _make_task(account_id: uuid.UUID, **overrides):
         created_at=datetime.now(timezone.utc),
         started_at=None,
         completed_at=None,
+        retry_count=0,
+        retry_of_task_id=None,
+        error_category=None,
     )
     defaults.update(overrides)
     task = MagicMock()

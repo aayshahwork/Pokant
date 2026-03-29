@@ -56,6 +56,9 @@ def _task_to_response(task: Task) -> TaskResponse:
         duration_ms=task.duration_ms or 0,
         created_at=task.created_at or datetime.now(timezone.utc),
         completed_at=task.completed_at,
+        retry_count=task.retry_count or 0,
+        retry_of_task_id=task.retry_of_task_id,
+        error_category=task.error_category,
     )
 
 
@@ -155,6 +158,8 @@ async def create_task(
         "max_cost_cents": body.max_cost_cents,
         "session_id": str(body.session_id) if body.session_id else None,
         "webhook_url": str(body.webhook_url) if body.webhook_url else None,
+        "retry_attempts": body.max_retries,
+        "retry_delay_seconds": 2,
     })
 
     _celery.send_task(
@@ -361,6 +366,29 @@ async def retry_task(
     )
     await db.commit()
     await db.refresh(new_task)
+
+    # Enqueue to Celery (was missing — ghost task bug fix)
+    tier = account.tier or "free"
+    tier_config = TIER_LIMITS.get(tier, TIER_LIMITS["free"])
+    config_json = json.dumps({
+        "url": original.url,
+        "task": original.task_description,
+        "credentials": None,
+        "output_schema": original.output_schema,
+        "max_steps": tier_config["max_steps"],
+        "timeout_seconds": tier_config["timeout"],
+        "max_cost_cents": original.max_cost_cents,
+        "session_id": str(original.session_id) if original.session_id else None,
+        "webhook_url": original.webhook_url,
+        "retry_attempts": 0,
+        "retry_delay_seconds": 2,
+    })
+    _celery.send_task(
+        "computeruse.execute_task",
+        args=[str(new_task.id), config_json],
+        queue=f"tasks:{tier}",
+        task_id=str(new_task.id),
+    )
 
     logger.info("task_retried", original_id=str(task_id), new_id=str(new_task.id))
     return _task_to_response(new_task)

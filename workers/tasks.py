@@ -102,15 +102,19 @@ def execute_task(self, task_id: str, task_config_json: str) -> None:
                 "SET status = 'running', "
                 "    started_at = now(), "
                 "    worker_id = :worker_id "
-                "WHERE id = :task_id::uuid AND status = 'queued'"
+                "WHERE id = :task_id::uuid AND status = 'queued' "
+                "RETURNING account_id"
             ),
             {"task_id": task_id, "worker_id": self.request.hostname},
         )
+        row = result.first()
         session.commit()
 
-        if result.rowcount == 0:  # type: ignore[attr-defined]
+        if row is None:
             logger.warning("Task %s already claimed or not queued, skipping", task_id)
             return
+
+        account_id = str(row.account_id)
     except Exception:
         session.rollback()
         raise
@@ -175,6 +179,7 @@ def execute_task(self, task_id: str, task_config_json: str) -> None:
             use_cloud=bool(worker_settings.BROWSERBASE_API_KEY),
             shutdown_check=is_shutting_down,
             step_data=shared_steps,
+            account_id=account_id,
         )
 
         task_result: TaskResult = asyncio.run(executor.execute())
@@ -184,14 +189,50 @@ def execute_task(self, task_id: str, task_config_json: str) -> None:
         # because signal handlers look up metadata by sender.request.id.
         from workers.metrics import record_task_cost
 
-        record_task_cost(self.request.id, task_result.cost_cents, task_result.steps)
+        record_task_cost(
+            self.request.id,
+            task_result.cost_cents,
+            task_result.steps,
+            tokens_in=task_result.total_tokens_in,
+            tokens_out=task_result.total_tokens_out,
+        )
 
         # ── 4-7. Persist result ────────────────────────────────────────────
         _persist_result(task_id, task_result, config_dict)
 
+        # ── Auto-retry for tasks that completed with failure status ────────
+        if not task_result.success:
+            try:
+                from workers.error_classifier import classify_error_message
+
+                classified = classify_error_message(task_result.error or "")
+                _maybe_auto_retry(
+                    task_id,
+                    classified.category,
+                    config_dict,
+                    classified.retry_after_seconds,
+                )
+            except Exception:
+                logger.warning(
+                    "Auto-retry evaluation failed for task %s", task_id
+                )
+
     except Exception as exc:
         logger.exception("Task %s failed with exception", task_id)
         _persist_failure(task_id, str(exc), config_dict)
+        # Classify error and attempt auto-retry
+        try:
+            from workers.error_classifier import classify_error
+
+            classified = classify_error(exc)
+            _maybe_auto_retry(
+                task_id,
+                classified.category,
+                config_dict,
+                classified.retry_after_seconds,
+            )
+        except Exception:
+            logger.warning("Auto-retry evaluation failed for task %s", task_id)
     finally:
         try:
             deregister_in_flight(task_id)
@@ -229,8 +270,8 @@ def _persist_result(task_id: str, result: Any, config_dict: dict) -> None:
         task.total_steps = result.steps
         task.duration_ms = result.duration_ms
         task.cost_cents = Decimal(str(result.cost_cents))
-        task.total_tokens_in = sum(s.tokens_in for s in result.step_data)
-        task.total_tokens_out = sum(s.tokens_out for s in result.step_data)
+        task.total_tokens_in = result.total_tokens_in or sum(s.tokens_in for s in result.step_data)
+        task.total_tokens_out = result.total_tokens_out or sum(s.tokens_out for s in result.step_data)
         task.completed_at = datetime.now(timezone.utc)
 
         # Upload replay
@@ -308,6 +349,102 @@ def _persist_failure(task_id: str, error: str, config_dict: dict) -> None:
     except Exception:
         session.rollback()
         logger.exception("Failed to persist failure for task %s", task_id)
+    finally:
+        session.close()
+
+
+# ---------------------------------------------------------------------------
+# Auto-retry logic
+# ---------------------------------------------------------------------------
+
+
+def _maybe_auto_retry(
+    task_id: str,
+    error_category: str,
+    config_dict: dict,
+    retry_after_seconds: int | None = None,
+) -> None:
+    """Auto-retry a failed task if the error is transient and retries remain.
+
+    Creates a new task row (flat retry chain via retry_of_task_id) and
+    enqueues it to Celery with a backoff delay.
+    """
+    from api.models.account import Account
+    from api.models.task import Task
+    from workers.db import get_sync_session
+    from workers.retry_policy import should_retry_task
+
+    session = get_sync_session()
+    try:
+        task = session.get(Task, uuid.UUID(task_id))
+        if task is None:
+            return
+
+        # Persist error category on the failed task
+        task.error_category = error_category
+        session.commit()
+
+        max_retries = config_dict.get("retry_attempts", 3)
+        base_delay = config_dict.get("retry_delay_seconds", 2)
+
+        decision = should_retry_task(
+            error_category=error_category,
+            retry_count=task.retry_count or 0,
+            max_retries=max_retries,
+            base_delay=base_delay,
+            retry_after_seconds=retry_after_seconds,
+        )
+
+        if not decision.should_retry:
+            logger.info(
+                "No auto-retry for task %s: %s", task_id, decision.reason
+            )
+            return
+
+        # Determine queue from account tier
+        account = session.get(Account, task.account_id)
+        tier = account.tier if account else "free"
+        queue = f"tasks:{tier}"
+
+        # Create retry task row (flat chain)
+        new_task_id = uuid.uuid4()
+        new_task = Task(
+            id=new_task_id,
+            account_id=task.account_id,
+            status="queued",
+            url=task.url,
+            task_description=task.task_description,
+            output_schema=task.output_schema,
+            webhook_url=task.webhook_url,
+            max_cost_cents=task.max_cost_cents,
+            session_id=task.session_id,
+            retry_count=(task.retry_count or 0) + 1,
+            retry_of_task_id=task.retry_of_task_id or task.id,
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(new_task)
+        session.commit()
+
+        # Enqueue with backoff delay
+        celery_app.send_task(
+            "computeruse.execute_task",
+            args=[str(new_task_id), json.dumps(config_dict)],
+            queue=queue,
+            task_id=str(new_task_id),
+            countdown=decision.delay_seconds,
+        )
+
+        logger.info(
+            "Auto-retry task %s -> %s (attempt %d, delay %ds: %s)",
+            task_id,
+            str(new_task_id),
+            new_task.retry_count,
+            decision.delay_seconds,
+            decision.reason,
+        )
+    except Exception:
+        session.rollback()
+        logger.exception("Failed to auto-retry task %s", task_id)
     finally:
         session.close()
 

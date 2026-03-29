@@ -79,4 +79,7 @@ class TaskResult:
     steps: int = 0
     duration_ms: int = 0
     cost_cents: float = 0.0
+    total_tokens_in: int = 0
+    total_tokens_out: int = 0
     step_data: List[StepData] = field(default_factory=list)
+    error_category: Optional[str] = None

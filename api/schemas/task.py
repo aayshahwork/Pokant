@@ -51,6 +51,9 @@ class TaskResponse(BaseModel):
     duration_ms: int = 0
     created_at: datetime
     completed_at: datetime | None = None
+    retry_count: int = 0
+    retry_of_task_id: uuid.UUID | None = None
+    error_category: str | None = None
 
     model_config = {"from_attributes": True}
 

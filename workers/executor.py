@@ -8,7 +8,7 @@ structured results.
 
 from __future__ import annotations
 
-import base64
+import asyncio
 import json
 import logging
 import time
@@ -148,7 +148,8 @@ class TaskExecutor:
         use_cloud: bool = False,
         shutdown_check: Optional[Callable[[], bool]] = None,
         step_data: Optional[List[StepData]] = None,
-        model: str = "claude-sonnet-4-5-20250514",
+        model: str = "claude-sonnet-4-6",
+        account_id: Optional[str] = None,
     ) -> None:
         self.config = config
         self.browser_manager = browser_manager
@@ -157,6 +158,7 @@ class TaskExecutor:
         self.shutdown_check = shutdown_check
         self._shared_step_data = step_data
         self.model = model
+        self.account_id = account_id
         self.steps: List[StepData] = []
 
     async def execute(self) -> TaskResult:
@@ -164,9 +166,12 @@ class TaskExecutor:
 
         1. Generate task_id, record start_time.
         2. Acquire browser, create page (1280x720), apply stealth.
-        3. Navigate to config.url, capture step 1.
+        2b. Restore session cookies if session_id is set (Hook B/C).
+        3. Navigate to config.url (with retry), capture step 1.
+        3b. Verify restored session is still valid (Hook D).
         4. Run browser_use Agent via _execute_with_agent.
-        5. Cleanup browser in finally block.
+        4b. Save session cookies on success (Hook G).
+        5. Cleanup browser and async DB session in finally block.
         6. Return TaskResult.
         """
         task_id = str(uuid.uuid4())
@@ -175,6 +180,25 @@ class TaskExecutor:
         # accumulated steps for partial replay generation).
         self.steps = self._shared_step_data if self._shared_step_data is not None else []
         browser = None
+        async_db_session = None
+
+        # -- Session manager setup (lazy, only when session_id is present) --
+        session_manager = None
+        if self.account_id and self.config.session_id:
+            try:
+                from workers.db import get_async_session_factory
+                from workers.encryption import EncryptionKeyCache
+                from workers.session_manager import SessionManager
+                import redis as redis_lib
+
+                async_db_session = get_async_session_factory()()
+                encryption_cache = EncryptionKeyCache(worker_settings.ENCRYPTION_MASTER_KEY)
+                redis_client = redis_lib.Redis.from_url(
+                    worker_settings.REDIS_URL, decode_responses=True
+                )
+                session_manager = SessionManager(async_db_session, encryption_cache, redis_client)
+            except Exception as exc:
+                logger.warning("Failed to initialise SessionManager: %s", exc)
 
         try:
             # -- Step 2: Browser setup --
@@ -187,12 +211,31 @@ class TaskExecutor:
                     "Chrome/121.0.0.0 Safari/537.36"
                 ),
             )
+
+            # -- Hook B/C: Restore session cookies --
+            session_restored = False
+            if session_manager:
+                try:
+                    domain = urlparse(self.config.url).netloc
+                    cookies = await session_manager.load_session(
+                        account_id=uuid.UUID(self.account_id),
+                        domain=domain,
+                    )
+                    if cookies:
+                        await context.add_cookies(cookies)
+                        session_restored = True
+                        logger.info("Restored %d cookies for %s", len(cookies), domain)
+                        from workers.metrics import celery_session_restored_total
+                        celery_session_restored_total.labels(domain=domain).inc()
+                except Exception as exc:
+                    logger.warning("Session restore failed: %s", exc)
+
             page = await context.new_page()
             await self.browser_manager.apply_stealth(page, task_id)
 
-            # -- Step 3: Navigate --
+            # -- Step 3: Navigate (with retry) --
             step_start = time.monotonic()
-            await page.goto(self.config.url, wait_until="networkidle", timeout=30_000)
+            await self._navigate_with_retry(page, self.config.url)
             screenshot_bytes = await page.screenshot(type="jpeg", quality=85)
             self.steps.append(StepData(
                 step_number=1,
@@ -204,20 +247,61 @@ class TaskExecutor:
                 success=True,
             ))
 
+            # -- Hook D: Verify restored session --
+            if session_restored:
+                domain = urlparse(self.config.url).netloc
+                if not await self._verify_session(page, domain):
+                    logger.warning("Stale session for %s", domain)
+                    session_restored = False
+                    from workers.metrics import celery_session_stale_total
+                    celery_session_stale_total.labels(domain=domain).inc()
+
             # -- Step 4: Run browser_use Agent --
             raw_result = await self._execute_with_agent(browser, self.config)
             result_data = None
             if hasattr(raw_result, "final_result"):
                 result_data = raw_result.final_result()
 
+            # -- Hook G: Save session cookies on success --
+            if session_manager and self.config.session_id and session_restored is not False:
+                try:
+                    domain = urlparse(self.config.url).netloc
+                    cookies = await context.cookies()
+                    await session_manager.save_session(
+                        account_id=uuid.UUID(self.account_id),
+                        domain=domain,
+                        cookies=cookies,
+                    )
+                    logger.info("Saved %d cookies for %s", len(cookies), domain)
+                    from workers.metrics import celery_session_saved_total
+                    celery_session_saved_total.labels(domain=domain).inc()
+                except Exception as exc:
+                    logger.warning("Failed to save session: %s", exc)
+
+            # -- Step 5: Enrich steps from browser_use history --
+            self._enrich_steps_from_history(raw_result)
+            cost_cents = self._calculate_cost_from_result(raw_result)
+            total_in = sum(s.tokens_in for s in self.steps)
+            total_out = sum(s.tokens_out for s in self.steps)
+
+            # Determine success from browser_use result if available
+            success = True
+            if hasattr(raw_result, "is_done"):
+                try:
+                    success = bool(raw_result.is_done())
+                except Exception:
+                    pass
+
             return TaskResult(
                 task_id=task_id,
                 status="completed",
-                success=True,
+                success=success,
                 result=result_data,
                 steps=len(self.steps),
                 duration_ms=int((time.monotonic() - start_time) * 1000),
-                cost_cents=0.0,
+                cost_cents=cost_cents,
+                total_tokens_in=total_in,
+                total_tokens_out=total_out,
                 step_data=self.steps,
             )
 
@@ -231,10 +315,17 @@ class TaskExecutor:
                 steps=len(self.steps),
                 duration_ms=int((time.monotonic() - start_time) * 1000),
                 cost_cents=0.0,
+                total_tokens_in=sum(s.tokens_in for s in self.steps),
+                total_tokens_out=sum(s.tokens_out for s in self.steps),
                 step_data=self.steps,
             )
 
         finally:
+            if async_db_session is not None:
+                try:
+                    await async_db_session.close()
+                except Exception as exc:
+                    logger.warning("Error closing async DB session: %s", exc)
             if browser is not None:
                 try:
                     await self.browser_manager.release_browser(browser)
@@ -259,6 +350,7 @@ class TaskExecutor:
             llm=llm,
             browser=browser,
             register_new_step_callback=self._on_agent_step,
+            calculate_cost=True,
         )
 
         try:
@@ -281,6 +373,206 @@ class TaskExecutor:
         )
         self.steps.append(step)
         console.log(f"[dim]Step {step_number}[/]")
+
+    # ------------------------------------------------------------------
+    # Session verification
+    # ------------------------------------------------------------------
+
+    async def _verify_session(self, page: Any, expected_domain: str) -> bool:
+        """Check if a restored session is still valid.
+
+        Conservative: returns ``True`` when uncertain so that valid sessions
+        are never incorrectly discarded.
+        """
+        try:
+            url = page.url.lower()
+            login_patterns = ["/login", "/signin", "/sign-in", "/auth", "/sso", "/oauth"]
+            if any(p in url for p in login_patterns):
+                return False
+
+            password_visible = await page.evaluate(
+                """() => {
+                    const inputs = document.querySelectorAll('input[type="password"]');
+                    return Array.from(inputs).some(input => {
+                        const rect = input.getBoundingClientRect();
+                        const style = window.getComputedStyle(input);
+                        return rect.width > 0 && rect.height > 0
+                            && style.display !== 'none' && style.visibility !== 'hidden';
+                    });
+                }"""
+            )
+            if password_visible:
+                return False
+
+            return True
+        except Exception:
+            return True  # don't break on verification errors
+
+    # ------------------------------------------------------------------
+    # Navigation with transient-error retry
+    # ------------------------------------------------------------------
+
+    async def _navigate_with_retry(
+        self, page: Any, url: str, max_attempts: int = 3
+    ) -> None:
+        """Navigate to *url* with retry for transient network errors."""
+        for attempt in range(max_attempts):
+            try:
+                await page.goto(url, wait_until="networkidle", timeout=30_000)
+                return
+            except Exception as exc:
+                msg = str(exc).lower()
+                transient_patterns = ["net::err_", "timeout", "connection refused", "dns"]
+                is_transient = any(p in msg for p in transient_patterns)
+                if not is_transient or attempt == max_attempts - 1:
+                    raise
+                delay = 2 ** attempt
+                logger.warning(
+                    "Navigation failed (attempt %d/%d): %s. Retrying in %ds",
+                    attempt + 1,
+                    max_attempts,
+                    exc,
+                    delay,
+                )
+                from workers.metrics import celery_navigation_retry_total
+                celery_navigation_retry_total.inc()
+                await asyncio.sleep(delay)
+
+    # ------------------------------------------------------------------
+    # Post-run enrichment from browser_use AgentHistoryList
+    # ------------------------------------------------------------------
+
+    def _enrich_steps_from_history(self, result: Any) -> None:
+        """Backfill step data from browser_use's AgentHistoryList.
+
+        Steps in self.steps: index 0 is the NAVIGATE step (captured by executor).
+        Steps from browser_use history: index 0 is the first AGENT step.
+        So agent history entry i maps to self.steps[i + 1].
+        """
+        try:
+            history = getattr(result, "history", None) or []
+            screenshots = []
+            try:
+                screenshots = result.screenshots() if hasattr(result, "screenshots") else []
+            except Exception:
+                pass
+
+            action_names = []
+            try:
+                action_names = result.action_names() if hasattr(result, "action_names") else []
+            except Exception:
+                pass
+
+            for i, agent_step in enumerate(history):
+                step_index = i + 1  # offset for navigate step
+                if step_index >= len(self.steps):
+                    # History has more entries than callback produced — append
+                    self.steps.append(StepData(
+                        step_number=len(self.steps) + 1,
+                        timestamp=datetime.now(timezone.utc),
+                    ))
+
+                step = self.steps[step_index]
+
+                # Screenshot
+                if i < len(screenshots) and screenshots[i]:
+                    step.screenshot_bytes = screenshots[i]
+
+                # Action type from action_names()
+                if i < len(action_names) and action_names[i]:
+                    step.action_type = self._map_browser_use_action(action_names[i])
+
+                # Success/failure from action results
+                step_result = getattr(agent_step, "result", None)
+                if step_result and isinstance(step_result, list):
+                    errors = []
+                    for r in step_result:
+                        err = getattr(r, "error", None)
+                        if err:
+                            errors.append(str(err))
+                    if errors:
+                        step.success = False
+                        step.error = "; ".join(errors[:3])
+
+                # Description from model_output
+                mo = getattr(agent_step, "model_output", None)
+                if mo:
+                    parts = []
+                    next_goal = getattr(mo, "next_goal", None)
+                    if next_goal:
+                        parts.append(str(next_goal))
+                    eval_prev = getattr(mo, "evaluation_previous_goal", None)
+                    if eval_prev:
+                        parts.append(f"[eval: {eval_prev}]")
+                    if parts:
+                        step.description = " | ".join(parts)[:500]
+
+                # Token counts from step metadata
+                meta = getattr(agent_step, "metadata", None)
+                if meta:
+                    step.tokens_in = getattr(meta, "input_tokens", 0) or 0
+                    step.tokens_out = getattr(meta, "output_tokens", 0) or 0
+                    step_dur = getattr(meta, "step_duration", None)
+                    if step_dur is not None:
+                        step.duration_ms = int(step_dur * 1000)
+
+        except Exception as e:
+            logger.warning("Failed to enrich steps from browser_use history: %s", e)
+
+    def _calculate_cost_from_result(self, result: Any) -> float:
+        """Extract total cost in cents from browser_use result.
+
+        Tries result.total_cost() first (returns dollars), then falls back to
+        summing token counts from enriched steps.
+        """
+        try:
+            # browser_use provides total_cost() when calculate_cost=True
+            if hasattr(result, "total_cost"):
+                total_dollars = result.total_cost()
+                if total_dollars and total_dollars > 0:
+                    return total_dollars * 100  # dollars → cents
+            # Fallback: sum from usage summary
+            usage = getattr(result, "usage", None)
+            if usage:
+                total_cost = getattr(usage, "total_cost", 0.0) or 0.0
+                if total_cost > 0:
+                    return total_cost * 100
+        except Exception:
+            pass
+
+        # Final fallback: compute from per-step token counts
+        try:
+            total_in = sum(s.tokens_in for s in self.steps)
+            total_out = sum(s.tokens_out for s in self.steps)
+            if total_in or total_out:
+                return (total_in * _COST_PER_M_INPUT + total_out * _COST_PER_M_OUTPUT) / 1_000_000 * 100
+        except Exception as e:
+            logger.warning("Failed to calculate cost: %s", e)
+
+        return 0.0
+
+    @staticmethod
+    def _map_browser_use_action(action_name: str) -> ActionType:
+        """Map browser_use action name strings to ActionType enum."""
+        mapping = {
+            # Class-name style (browser_use action_names())
+            "GoToUrlAction": ActionType.NAVIGATE,
+            "ClickElementAction": ActionType.CLICK,
+            "InputTextAction": ActionType.TYPE,
+            "ScrollAction": ActionType.SCROLL,
+            "ExtractPageContentAction": ActionType.EXTRACT,
+            "WaitAction": ActionType.WAIT,
+            "DoneAction": ActionType.EXTRACT,
+            # snake_case style (alternative format)
+            "go_to_url": ActionType.NAVIGATE,
+            "click_element": ActionType.CLICK,
+            "input_text": ActionType.TYPE,
+            "scroll": ActionType.SCROLL,
+            "extract_content": ActionType.EXTRACT,
+            "wait": ActionType.WAIT,
+            "done": ActionType.EXTRACT,
+        }
+        return mapping.get(action_name, ActionType.UNKNOWN)
 
     def _build_task_prompt(self, config: TaskConfig) -> str:
         """Build the task prompt passed to the browser_use Agent."""

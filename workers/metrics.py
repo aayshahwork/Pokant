@@ -70,6 +70,39 @@ task_cost_cents = Histogram(
     buckets=[0.1, 0.5, 1, 5, 10, 50, 100, 500],
 )
 
+task_tokens_in_total = Counter(
+    "celery_task_tokens_in_total",
+    "Total input tokens consumed",
+    ["task_name"],
+)
+
+task_tokens_out_total = Counter(
+    "celery_task_tokens_out_total",
+    "Total output tokens consumed",
+    ["task_name"],
+)
+
+# Session management metrics
+celery_session_restored_total = Counter(
+    "celery_session_restored_total",
+    "Sessions restored from encrypted storage",
+    ["domain"],
+)
+celery_session_stale_total = Counter(
+    "celery_session_stale_total",
+    "Stale sessions detected (login redirect)",
+    ["domain"],
+)
+celery_session_saved_total = Counter(
+    "celery_session_saved_total",
+    "Sessions saved after successful execution",
+    ["domain"],
+)
+celery_navigation_retry_total = Counter(
+    "celery_navigation_retry_total",
+    "Navigation retries due to transient errors",
+)
+
 # ---------------------------------------------------------------------------
 # Task timing bookkeeping
 # ---------------------------------------------------------------------------
@@ -78,12 +111,23 @@ _task_start_times: dict[str, float] = {}
 _task_metadata: dict[str, dict] = {}  # task_id -> {cost_cents, steps}
 
 
-def record_task_cost(task_id: str, cost_cents: float, steps: int) -> None:
-    """Store task cost/steps for retrieval in signal handlers.
+def record_task_cost(
+    task_id: str,
+    cost_cents: float,
+    steps: int,
+    tokens_in: int = 0,
+    tokens_out: int = 0,
+) -> None:
+    """Store task cost/steps/tokens for retrieval in signal handlers.
 
     Called from ``workers/tasks.py`` after execution completes.
     """
-    _task_metadata[task_id] = {"cost_cents": cost_cents, "steps": steps}
+    _task_metadata[task_id] = {
+        "cost_cents": cost_cents,
+        "steps": steps,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+    }
 
 
 @signals.task_prerun.connect
@@ -101,10 +145,12 @@ def _on_task_success(sender=None, **kwargs):  # noqa: ARG001
         task_duration_seconds.labels(task_name=task_name).observe(duration)
     task_success_total.labels(task_name=task_name).inc()
 
-    # Record cost and canary observation
+    # Record cost, tokens, and canary observation
     meta = _task_metadata.pop(task_id, None)
     if meta:
         task_cost_cents.labels(task_name=task_name).observe(meta["cost_cents"])
+        task_tokens_in_total.labels(task_name=task_name).inc(meta.get("tokens_in", 0))
+        task_tokens_out_total.labels(task_name=task_name).inc(meta.get("tokens_out", 0))
         try:
             from workers.canary import record_and_evaluate
 
