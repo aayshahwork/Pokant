@@ -66,8 +66,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = Field(
         default=None,
         description=(
-            "Anthropic API key used for all model calls. "
-            "Obtain yours at https://console.anthropic.com/settings/keys"
+            "Anthropic API key used for all model calls. " "Obtain yours at https://console.anthropic.com/settings/keys"
         ),
     )
 
@@ -114,15 +113,13 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(
         default="postgresql://localhost/computeruse",
         description=(
-            "asyncpg-compatible PostgreSQL DSN used by the cloud API backend. "
-            "Not required for local SDK usage."
+            "asyncpg-compatible PostgreSQL DSN used by the cloud API backend. " "Not required for local SDK usage."
         ),
     )
     REDIS_URL: str = Field(
         default="redis://localhost:6379/0",
         description=(
-            "Redis connection URL used as the Celery broker and result backend. "
-            "Not required for local SDK usage."
+            "Redis connection URL used as the Celery broker and result backend. " "Not required for local SDK usage."
         ),
     )
 
@@ -251,11 +248,7 @@ class Settings(BaseSettings):
             else:
                 logger.info("S3 not configured — replay stored locally only")
         """
-        return bool(
-            self.AWS_ACCESS_KEY_ID
-            and self.AWS_SECRET_ACCESS_KEY
-            and self.AWS_BUCKET_NAME
-        )
+        return bool(self.AWS_ACCESS_KEY_ID and self.AWS_SECRET_ACCESS_KEY and self.AWS_BUCKET_NAME)
 
     @property
     def browserbase_configured(self) -> bool:

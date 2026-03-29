@@ -156,11 +156,7 @@ class TaskExecutor:
 
             # --- Extract result text from agent final state ---
             agent_result_text = ""
-            if (
-                hasattr(agent, "state")
-                and hasattr(agent.state, "result")
-                and agent.state.result
-            ):
+            if hasattr(agent, "state") and hasattr(agent.state, "result") and agent.state.result:
                 agent_result_text = str(agent.state.result)
                 print("[result] agent.state.result")
             elif hasattr(agent, "history") and hasattr(agent.history, "final_result"):
@@ -183,26 +179,20 @@ class TaskExecutor:
             # Extract structured output if schema provided
             extracted: Dict[str, Any] = {}
             if config.output_schema:
-                raw = await self._extract_output_from_text(
-                    agent_result_text or str(agent), config.output_schema
-                )
+                raw = await self._extract_output_from_text(agent_result_text or str(agent), config.output_schema)
                 extracted = self.validator.validate_output(raw, config.output_schema)
                 console.log(f"[green]Output validated:[/] {list(extracted.keys())}")
 
             replay_path = self._generate_replay(task_id, self.steps)
             duration_ms = int((time.monotonic() - start_time) * 1000)
 
-            console.log(
-                f"[bold green]Task completed[/] in {duration_ms / 1000:.2f}s "
-                f"({step_count} steps)"
-            )
+            console.log(f"[bold green]Task completed[/] in {duration_ms / 1000:.2f}s " f"({step_count} steps)")
 
             return TaskResult(
                 task_id=task_id,
                 status="completed",
                 success=True,
-                result=extracted
-                or ({"text": agent_result_text} if agent_result_text else None),
+                result=extracted or ({"text": agent_result_text} if agent_result_text else None),
                 replay_path=replay_path,
                 steps=step_count,
                 duration_ms=duration_ms,
@@ -216,9 +206,7 @@ class TaskExecutor:
             return self._failed_result(task_id, created_at, start_time, str(exc))
         except Exception as exc:
             logger.exception("Unexpected error during task %s", task_id)
-            return self._failed_result(
-                task_id, created_at, start_time, f"Unexpected error: {exc}"
-            )
+            return self._failed_result(task_id, created_at, start_time, f"Unexpected error: {exc}")
 
     # ------------------------------------------------------------------
     # Private: agent execution
@@ -317,9 +305,7 @@ class TaskExecutor:
     # Private: output extraction
     # ------------------------------------------------------------------
 
-    async def _extract_output(
-        self, page: Page, schema: Optional[Dict[str, str]]
-    ) -> Dict[str, Any]:
+    async def _extract_output(self, page: Page, schema: Optional[Dict[str, str]]) -> Dict[str, Any]:
         """Use the LLM to extract structured data from the current page.
 
         Takes a snapshot of the visible page text, constructs a targeted
@@ -371,13 +357,9 @@ class TaskExecutor:
         try:
             return self.validator.parse_llm_json(response_text)
         except ValueError as exc:
-            raise TaskExecutionError(
-                f"Could not parse JSON from extraction response: {exc}"
-            ) from exc
+            raise TaskExecutionError(f"Could not parse JSON from extraction response: {exc}") from exc
 
-    async def _extract_output_from_text(
-        self, page_text: str, schema: Optional[Dict[str, str]]
-    ) -> Dict[str, Any]:
+    async def _extract_output_from_text(self, page_text: str, schema: Optional[Dict[str, str]]) -> Dict[str, Any]:
         """Use the LLM to extract structured data from raw page text.
 
         Used when a direct Playwright page reference is unavailable (e.g. after
@@ -415,9 +397,7 @@ class TaskExecutor:
         try:
             return self.validator.parse_llm_json(response_text)
         except ValueError as exc:
-            raise TaskExecutionError(
-                f"Could not parse JSON from extraction response: {exc}"
-            ) from exc
+            raise TaskExecutionError(f"Could not parse JSON from extraction response: {exc}") from exc
 
     # ------------------------------------------------------------------
     # Private: step callback

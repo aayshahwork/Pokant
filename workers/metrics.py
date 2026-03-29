@@ -103,6 +103,23 @@ celery_navigation_retry_total = Counter(
     "Navigation retries due to transient errors",
 )
 
+# Stuck agent detection metrics
+celery_stuck_visual_stagnation_total = Counter(
+    "celery_stuck_visual_stagnation_total",
+    "Stuck agent: consecutive identical screenshots",
+    ["task_name"],
+)
+celery_stuck_action_repetition_total = Counter(
+    "celery_stuck_action_repetition_total",
+    "Stuck agent: same action repeated consecutively",
+    ["task_name"],
+)
+celery_stuck_failure_spiral_total = Counter(
+    "celery_stuck_failure_spiral_total",
+    "Stuck agent: consecutive step failures",
+    ["task_name"],
+)
+
 # ---------------------------------------------------------------------------
 # Task timing bookkeeping
 # ---------------------------------------------------------------------------

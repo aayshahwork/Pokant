@@ -160,13 +160,9 @@ class ComputerUse:
         if not self.local:
             return _run_sync(self._fetch_cloud_task(task_id))
 
-        raise KeyError(
-            f"No task with id {task_id!r} found in local storage ({_TASK_STORE})"
-        )
+        raise KeyError(f"No task with id {task_id!r} found in local storage ({_TASK_STORE})")
 
-    def list_tasks(
-        self, limit: int = 10, status: Optional[str] = None
-    ) -> List[TaskResult]:
+    def list_tasks(self, limit: int = 10, status: Optional[str] = None) -> List[TaskResult]:
         """Return the most recent task results, newest first.
 
         Args:
@@ -337,9 +333,7 @@ class ComputerUse:
             payload["webhook_url"] = config.webhook_url
 
         async with httpx.AsyncClient(timeout=30) as client:
-            submit = await client.post(
-                f"{_CLOUD_API_BASE}/tasks", headers=headers, json=payload
-            )
+            submit = await client.post(f"{_CLOUD_API_BASE}/tasks", headers=headers, json=payload)
             _raise_for_status(submit)
             task_id: str = submit.json()["task_id"]
             logger.info("Cloud task submitted: %s", task_id)
@@ -350,9 +344,7 @@ class ComputerUse:
             while time.monotonic() < deadline:
                 await asyncio.sleep(_POLL_INTERVAL)
                 try:
-                    poll = await client.get(
-                        f"{_CLOUD_API_BASE}/tasks/{task_id}", headers=headers
-                    )
+                    poll = await client.get(f"{_CLOUD_API_BASE}/tasks/{task_id}", headers=headers)
                     _raise_for_status(poll)
                     poll_errors = 0  # reset on success
                     poll_data: Dict[str, Any] = poll.json()
@@ -366,8 +358,7 @@ class ComputerUse:
                     poll_errors += 1
                     if poll_errors >= _MAX_POLL_RETRIES:
                         raise NetworkError(
-                            f"Lost connection to cloud API after "
-                            f"{_MAX_POLL_RETRIES} poll retry attempts: {exc}"
+                            f"Lost connection to cloud API after " f"{_MAX_POLL_RETRIES} poll retry attempts: {exc}"
                         ) from exc
                     logger.warning(
                         "Poll error %d/%d: %s. Retrying in %.0fs...",
@@ -393,17 +384,13 @@ class ComputerUse:
         """
         headers = {"Authorization": f"Bearer {self.api_key}"}
         async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.get(
-                f"{_CLOUD_API_BASE}/tasks/{task_id}", headers=headers
-            )
+            response = await client.get(f"{_CLOUD_API_BASE}/tasks/{task_id}", headers=headers)
         if response.status_code == 404:
             raise KeyError(f"Cloud task {task_id!r} not found")
         _raise_for_status(response)
         return _parse_cloud_result(response.json())
 
-    async def _list_cloud_tasks(
-        self, limit: int, status: Optional[str] = None
-    ) -> List[TaskResult]:
+    async def _list_cloud_tasks(self, limit: int, status: Optional[str] = None) -> List[TaskResult]:
         """Fetch recent tasks from the cloud API.
 
         Raises:
@@ -438,9 +425,7 @@ class ComputerUse:
                     headers=headers,
                 )
         except (httpx.NetworkError, httpx.TimeoutException) as exc:
-            raise NetworkError(
-                f"Failed to fetch replay for task {task_id!r}: {exc}"
-            ) from exc
+            raise NetworkError(f"Failed to fetch replay for task {task_id!r}: {exc}") from exc
 
         if response.status_code == 404:
             raise ComputerUseSDKError(f"No replay found for cloud task {task_id!r}")

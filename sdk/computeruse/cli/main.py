@@ -55,9 +55,7 @@ def cli() -> None:
 
 @cli.command()
 @click.option("--url", required=True, help="Starting URL for the task.")
-@click.option(
-    "--task", required=True, help="Natural-language description of what to do."
-)
+@click.option("--task", required=True, help="Natural-language description of what to do.")
 @click.option(
     "--username",
     default=None,
@@ -136,24 +134,17 @@ def run(
         try:
             output_schema = json.loads(schema)
             if not isinstance(output_schema, dict):
-                raise ValueError(
-                    "Schema must be a JSON object, not an array or scalar."
-                )
+                raise ValueError("Schema must be a JSON object, not an array or scalar.")
         except (json.JSONDecodeError, ValueError) as exc:
             err_console.print(f"[bold red]Invalid --schema:[/bold red] {exc}")
-            err_console.print(
-                '  Expected a JSON object, e.g. \'{"price":"float","titles":"list[str]"}\''
-            )
+            err_console.print('  Expected a JSON object, e.g. \'{"price":"float","titles":"list[str]"}\'')
             sys.exit(1)
 
     # ── Build credentials dict ───────────────────────────────────────────────
     credentials: Optional[dict] = None
     if username or password:
         if not (username and password):
-            err_console.print(
-                "[bold red]Error:[/bold red] "
-                "--username and --password must both be provided."
-            )
+            err_console.print("[bold red]Error:[/bold red] " "--username and --password must both be provided.")
             sys.exit(1)
         credentials = {"username": username, "password": password}
 
@@ -169,9 +160,7 @@ def run(
         "[dim]Browser[/dim]",
         "[yellow]visible[/yellow]" if no_headless else "headless",
     )
-    console.print(
-        Panel(summary, title="[bold]ComputerUse Task[/bold]", border_style="blue")
-    )
+    console.print(Panel(summary, title="[bold]ComputerUse Task[/bold]", border_style="blue"))
 
     # ── Execute ──────────────────────────────────────────────────────────────
     cu = ComputerUse(headless=not no_headless)
@@ -227,10 +216,7 @@ def replay(replay_file: str) -> None:
     suffix = path.suffix.lower()
 
     if suffix not in {".json", ".html"}:
-        err_console.print(
-            f"[bold red]Unsupported file type '{suffix}'.[/bold red] "
-            "Expected .json or .html"
-        )
+        err_console.print(f"[bold red]Unsupported file type '{suffix}'.[/bold red] " "Expected .json or .html")
         sys.exit(1)
 
     url = path.as_uri()
@@ -276,13 +262,9 @@ def sessions(delete_domain: Optional[str], session_dir: str) -> None:
     if delete_domain:
         deleted = manager.delete_session(delete_domain)
         if deleted:
-            console.print(
-                f"[green]✓[/green] Deleted session for [cyan]{delete_domain}[/cyan]"
-            )
+            console.print(f"[green]✓[/green] Deleted session for [cyan]{delete_domain}[/cyan]")
         else:
-            console.print(
-                f"[yellow]No session found for[/yellow] [cyan]{delete_domain}[/cyan]"
-            )
+            console.print(f"[yellow]No session found for[/yellow] [cyan]{delete_domain}[/cyan]")
         return
 
     # ── List mode ────────────────────────────────────────────────────────────
@@ -309,9 +291,7 @@ def sessions(delete_domain: Optional[str], session_dir: str) -> None:
     for i, domain in enumerate(domain_list, start=1):
         # SessionManager sanitises the domain for the filename; reconstruct the
         # expected path for display only — the manager handles the real lookup.
-        session_files = (
-            list(Path(session_dir).glob("*.json")) if Path(session_dir).exists() else []
-        )
+        session_files = list(Path(session_dir).glob("*.json")) if Path(session_dir).exists() else []
         # Find the first file whose stored domain matches.
         file_display = "[dim](unknown)[/dim]"
         for sf in session_files:
@@ -326,10 +306,7 @@ def sessions(delete_domain: Optional[str], session_dir: str) -> None:
         table.add_row(str(i), f"[cyan]{domain}[/cyan]", file_display)
 
     console.print(table)
-    console.print(
-        "\n[dim]To delete a session:[/dim] "
-        "[cyan]computeruse sessions --delete <domain>[/cyan]"
-    )
+    console.print("\n[dim]To delete a session:[/dim] " "[cyan]computeruse sessions --delete <domain>[/cyan]")
 
 
 # ---------------------------------------------------------------------------
@@ -340,9 +317,7 @@ def sessions(delete_domain: Optional[str], session_dir: str) -> None:
 @cli.command()
 def version() -> None:
     """Print the installed ComputerUse SDK version."""
-    console.print(
-        f"[bold]ComputerUse[/bold] version [cyan]{computeruse.__version__}[/cyan]"
-    )
+    console.print(f"[bold]ComputerUse[/bold] version [cyan]{computeruse.__version__}[/cyan]")
 
 
 # ---------------------------------------------------------------------------
@@ -393,9 +368,7 @@ def _print_result(result) -> None:  # type: ignore[no-untyped-def]
                 display_val = display_val[:77] + "…"
             data_table.add_row(f"[cyan]{key}[/cyan]", display_val)
 
-        console.print(
-            Panel(data_table, title="[bold]Extracted Data[/bold]", border_style="cyan")
-        )
+        console.print(Panel(data_table, title="[bold]Extracted Data[/bold]", border_style="cyan"))
 
 
 # ---------------------------------------------------------------------------

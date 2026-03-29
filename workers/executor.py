@@ -24,6 +24,7 @@ from workers.captcha_solver import CaptchaSolver
 from workers.config import worker_settings
 from workers.credential_injector import CredentialInjector
 from workers.models import ActionType, StepData, TaskConfig, TaskResult
+from workers.stuck_detector import StuckDetector
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -160,6 +161,7 @@ class TaskExecutor:
         self.model = model
         self.account_id = account_id
         self.steps: List[StepData] = []
+        self._stuck_detector = StuckDetector()
 
     async def execute(self) -> TaskResult:
         """Execute the task end-to-end.
@@ -280,6 +282,28 @@ class TaskExecutor:
 
             # -- Step 5: Enrich steps from browser_use history --
             self._enrich_steps_from_history(raw_result)
+
+            # -- Stuck analysis on enriched steps --
+            stuck_signal = self._stuck_detector.analyze_full_history(self.steps)
+            if stuck_signal.detected:
+                logger.warning(
+                    "Post-execution stuck analysis: reason=%s step=%d details=%s",
+                    stuck_signal.reason, stuck_signal.step_number, stuck_signal.details,
+                )
+                from workers.metrics import (
+                    celery_stuck_action_repetition_total,
+                    celery_stuck_failure_spiral_total,
+                    celery_stuck_visual_stagnation_total,
+                )
+                _stuck_metric_map = {
+                    "visual_stagnation": celery_stuck_visual_stagnation_total,
+                    "action_repetition": celery_stuck_action_repetition_total,
+                    "failure_spiral": celery_stuck_failure_spiral_total,
+                }
+                counter = _stuck_metric_map.get(stuck_signal.reason)
+                if counter:
+                    counter.labels(task_name="computeruse.execute_task").inc()
+
             cost_cents = self._calculate_cost_from_result(raw_result)
             total_in = sum(s.tokens_in for s in self.steps)
             total_out = sum(s.tokens_out for s in self.steps)
@@ -354,7 +378,11 @@ class TaskExecutor:
         )
 
         try:
-            result = await agent.run(max_steps=config.max_steps)
+            import inspect
+            run_kwargs: dict[str, Any] = {"max_steps": config.max_steps}
+            if "on_step_end" in inspect.signature(agent.run).parameters:
+                run_kwargs["on_step_end"] = self._on_step_end
+            result = await agent.run(**run_kwargs)
             return result
         except Exception as exc:
             raise TaskExecutionError(
@@ -373,6 +401,40 @@ class TaskExecutor:
         )
         self.steps.append(step)
         console.log(f"[dim]Step {step_number}[/]")
+
+    async def _on_step_end(self, agent: Any) -> None:
+        """Async hook for real-time stuck detection during agent.run()."""
+        try:
+            history = getattr(agent, "history", None)
+            if not history:
+                return
+            latest = history[-1] if isinstance(history, list) else None
+            if latest is None:
+                return
+            signal = self._stuck_detector.check_agent_step(latest)
+            if signal.detected:
+                logger.warning(
+                    "Stuck agent detected: reason=%s step=%d details=%s",
+                    signal.reason, signal.step_number, signal.details,
+                )
+                from workers.metrics import (
+                    celery_stuck_action_repetition_total,
+                    celery_stuck_failure_spiral_total,
+                    celery_stuck_visual_stagnation_total,
+                )
+                _metric_map = {
+                    "visual_stagnation": celery_stuck_visual_stagnation_total,
+                    "action_repetition": celery_stuck_action_repetition_total,
+                    "failure_spiral": celery_stuck_failure_spiral_total,
+                }
+                counter = _metric_map.get(signal.reason)
+                if counter:
+                    counter.labels(task_name="computeruse.execute_task").inc()
+                stop_fn = getattr(agent, "stop", None)
+                if callable(stop_fn):
+                    stop_fn()
+        except Exception as exc:
+            logger.debug("on_step_end stuck check failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Session verification

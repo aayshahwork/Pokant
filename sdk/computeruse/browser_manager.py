@@ -116,8 +116,7 @@ class BrowserManager:
         """
         if not self.browserbase_api_key:
             raise BrowserError(
-                "BrowserBase API key is not configured. "
-                "Set BROWSERBASE_API_KEY in your environment or .env file."
+                "BrowserBase API key is not configured. " "Set BROWSERBASE_API_KEY in your environment or .env file."
             )
 
         headers = {
@@ -134,23 +133,18 @@ class BrowserManager:
                 ) as response:
                     if response.status not in (200, 201):
                         body = await response.text()
-                        raise BrowserError(
-                            f"BrowserBase API returned HTTP {response.status}: {body}"
-                        )
+                        raise BrowserError(f"BrowserBase API returned HTTP {response.status}: {body}")
                     data: Dict[str, Any] = await response.json()
 
         except aiohttp.ClientError as exc:
-            raise BrowserError(
-                f"Network error while creating BrowserBase session: {exc}"
-            ) from exc
+            raise BrowserError(f"Network error while creating BrowserBase session: {exc}") from exc
 
         session_id: Optional[str] = data.get("id")
         ws_endpoint: Optional[str] = data.get("wsUrl") or data.get("ws_url")
 
         if not session_id or not ws_endpoint:
             raise BrowserError(
-                "BrowserBase response is missing 'id' or 'wsUrl'. "
-                f"Response keys received: {list(data.keys())}"
+                "BrowserBase response is missing 'id' or 'wsUrl'. " f"Response keys received: {list(data.keys())}"
             )
 
         logger.debug("BrowserBase session created: id=%s", session_id)
@@ -304,9 +298,7 @@ class BrowserManager:
             browser = await playwright.chromium.connect_over_cdp(ws_endpoint)
             logger.info("Connected to BrowserBase session %s", session["session_id"])
         except Exception as exc:
-            raise BrowserError(
-                f"Could not connect to BrowserBase endpoint '{ws_endpoint}': {exc}"
-            ) from exc
+            raise BrowserError(f"Could not connect to BrowserBase endpoint '{ws_endpoint}': {exc}") from exc
 
         if browser.contexts:
             self.configure_stealth_mode(browser.contexts[0])

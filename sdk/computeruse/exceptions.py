@@ -112,10 +112,7 @@ class RateLimitError(ComputerUseSDKError):
         return base
 
     def __repr__(self) -> str:
-        return (
-            f"{type(self).__name__}(message={self.message!r}, "
-            f"retry_after_seconds={self.retry_after_seconds!r})"
-        )
+        return f"{type(self).__name__}(message={self.message!r}, " f"retry_after_seconds={self.retry_after_seconds!r})"
 
 
 class NetworkError(ComputerUseSDKError):
@@ -162,10 +159,7 @@ class RetryExhaustedError(ComputerUseSDKError):
         return base
 
     def __repr__(self) -> str:
-        return (
-            f"{type(self).__name__}(message={self.message!r}, "
-            f"last_error={self.last_error!r})"
-        )
+        return f"{type(self).__name__}(message={self.message!r}, " f"last_error={self.last_error!r})"
 
 
 class SessionError(ComputerUseSDKError):
@@ -204,7 +198,4 @@ class APIError(ComputerUseSDKError):
         return base
 
     def __repr__(self) -> str:
-        return (
-            f"{type(self).__name__}(message={self.message!r}, "
-            f"status_code={self.status_code!r})"
-        )
+        return f"{type(self).__name__}(message={self.message!r}, " f"status_code={self.status_code!r})"

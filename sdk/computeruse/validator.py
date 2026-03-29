@@ -11,9 +11,7 @@ from computeruse.exceptions import ValidationError
 # ---------------------------------------------------------------------------
 
 # All recognised leaf type tokens (case-insensitive during parsing).
-_SCALAR_TYPES: frozenset[str] = frozenset(
-    {"str", "int", "float", "bool", "list", "dict"}
-)
+_SCALAR_TYPES: frozenset[str] = frozenset({"str", "int", "float", "bool", "list", "dict"})
 
 # Extracts the outer type name and the bracket contents from a parameterised
 # type expression such as "list[str]" or "dict[str, int]".
@@ -72,9 +70,7 @@ class OutputValidator:
     # Public API
     # ------------------------------------------------------------------
 
-    def validate_output(
-        self, output: Dict[str, Any], schema: Dict[str, str]
-    ) -> Dict[str, Any]:
+    def validate_output(self, output: Dict[str, Any], schema: Dict[str, str]) -> Dict[str, Any]:
         """Validate and coerce *output* against *schema*.
 
         Every field declared in *schema* must be present in *output*.
@@ -204,8 +200,7 @@ class OutputValidator:
                 )
             except json.JSONDecodeError as exc:
                 raise ValueError(
-                    f"Found a JSON-like substring but could not parse it: {exc}\n"
-                    f"  Candidate: {candidate[:120]!r}"
+                    f"Found a JSON-like substring but could not parse it: {exc}\n" f"  Candidate: {candidate[:120]!r}"
                 ) from exc
 
         raise ValueError(
@@ -272,8 +267,7 @@ class OutputValidator:
             # bool is a subclass of int in Python — guard against that.
             if target is int and isinstance(value, bool):
                 raise ValidationError(
-                    f"Cannot use bool {value!r} as int. "
-                    "Use 0 or 1 explicitly if an integer is required."
+                    f"Cannot use bool {value!r} as int. " "Use 0 or 1 explicitly if an integer is required."
                 )
             return value
 
@@ -292,8 +286,7 @@ class OutputValidator:
                 return _coerce_bare_dict(value)
         except (ValueError, TypeError) as exc:
             raise ValidationError(
-                f"Cannot convert {value!r} ({type(value).__name__}) "
-                f"to {type_str!r}: {exc}"
+                f"Cannot convert {value!r} ({type(value).__name__}) " f"to {type_str!r}: {exc}"
             ) from exc
 
         raise ValidationError(f"Unhandled type {type_str!r}")  # unreachable
@@ -407,9 +400,7 @@ class OutputValidator:
             try:
                 result.append(self.validate_type(item, item_type))
             except ValidationError as exc:
-                raise ValidationError(
-                    f"Element at index {i} of list[{item_type}] is invalid: {exc}"
-                ) from exc
+                raise ValidationError(f"Element at index {i} of list[{item_type}] is invalid: {exc}") from exc
         return result
 
     def _coerce_typed_dict(self, value: Any, value_type: str) -> Dict[str, Any]:
@@ -435,9 +426,7 @@ class OutputValidator:
             try:
                 result[k] = self.validate_type(v, value_type)
             except ValidationError as exc:
-                raise ValidationError(
-                    f"Value for key {k!r} in dict[str, {value_type}] is invalid: {exc}"
-                ) from exc
+                raise ValidationError(f"Value for key {k!r} in dict[str, {value_type}] is invalid: {exc}") from exc
         return result
 
 
@@ -463,10 +452,7 @@ def _coerce_bool(value: Any) -> bool:
     if isinstance(value, int):
         if value in (0, 1):
             return bool(value)
-        raise ValueError(
-            f"Integer {value!r} is ambiguous as bool. "
-            "Only 0 (False) and 1 (True) are accepted."
-        )
+        raise ValueError(f"Integer {value!r} is ambiguous as bool. " "Only 0 (False) and 1 (True) are accepted.")
     if isinstance(value, str):
         lowered = value.strip().lower()
         if lowered in ("true", "1", "yes", "on"):
@@ -477,10 +463,7 @@ def _coerce_bool(value: Any) -> bool:
             f"String {value!r} is not a recognised boolean literal. "
             "Accepted: 'true'/'false', '1'/'0', 'yes'/'no', 'on'/'off'."
         )
-    raise TypeError(
-        f"Cannot convert {type(value).__name__!r} to bool. "
-        "Provide a string or integer."
-    )
+    raise TypeError(f"Cannot convert {type(value).__name__!r} to bool. " "Provide a string or integer.")
 
 
 def _coerce_int(value: Any) -> int:
@@ -495,10 +478,7 @@ def _coerce_int(value: Any) -> int:
         raise TypeError(f"Cannot use bool {value!r} as int. " "Use 0 or 1 explicitly.")
     if isinstance(value, float):
         if not value.is_integer():
-            raise ValueError(
-                f"Cannot losslessly convert {value!r} to int "
-                "(fractional part would be discarded)."
-            )
+            raise ValueError(f"Cannot losslessly convert {value!r} to int " "(fractional part would be discarded).")
         return int(value)
     return int(value)  # raises ValueError for non-numeric strings
 
@@ -510,9 +490,7 @@ def _coerce_float(value: Any) -> float:
         ValueError: For strings that are not numeric.
     """
     if isinstance(value, bool):
-        raise TypeError(
-            f"Cannot use bool {value!r} as float. " "Use 0.0 or 1.0 explicitly."
-        )
+        raise TypeError(f"Cannot use bool {value!r} as float. " "Use 0.0 or 1.0 explicitly.")
     return float(value)
 
 
@@ -532,13 +510,8 @@ def _coerce_bare_list(value: Any) -> list:
                 return parsed
         except json.JSONDecodeError:
             pass
-        raise ValueError(
-            f"String {value!r} cannot be parsed as a JSON array. "
-            "Expected a value like '[1, 2, 3]'."
-        )
-    raise TypeError(
-        f"Expected a list or JSON array string, got {type(value).__name__!r}."
-    )
+        raise ValueError(f"String {value!r} cannot be parsed as a JSON array. " "Expected a value like '[1, 2, 3]'.")
+    raise TypeError(f"Expected a list or JSON array string, got {type(value).__name__!r}.")
 
 
 def _coerce_bare_dict(value: Any) -> dict:
@@ -558,12 +531,9 @@ def _coerce_bare_dict(value: Any) -> dict:
         except json.JSONDecodeError:
             pass
         raise ValueError(
-            f"String {value!r} cannot be parsed as a JSON object. "
-            'Expected a value like \'{"key": "val"}\'.'
+            f"String {value!r} cannot be parsed as a JSON object. " 'Expected a value like \'{"key": "val"}\'.'
         )
-    raise TypeError(
-        f"Expected a dict or JSON object string, got {type(value).__name__!r}."
-    )
+    raise TypeError(f"Expected a dict or JSON object string, got {type(value).__name__!r}.")
 
 
 def _split_top_level(s: str) -> List[str]:

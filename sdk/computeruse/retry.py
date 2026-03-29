@@ -65,9 +65,7 @@ class RetryHandler:
     # Public API
     # ------------------------------------------------------------------
 
-    async def execute_with_retry(
-        self, func: Callable[..., Any], *args: Any, **kwargs: Any
-    ) -> Any:
+    async def execute_with_retry(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Execute *func* with automatic retry on retryable errors.
 
         Calls ``func(*args, **kwargs)`` up to ``max_attempts`` times.  After
@@ -93,35 +91,23 @@ class RetryHandler:
 
         for attempt in range(self.max_attempts):
             try:
-                console.log(
-                    f"[bold cyan]Attempt {attempt + 1}/{self.max_attempts}[/] "
-                    f"→ [dim]{func.__name__}[/]"
-                )
+                console.log(f"[bold cyan]Attempt {attempt + 1}/{self.max_attempts}[/] " f"→ [dim]{func.__name__}[/]")
                 result = await func(*args, **kwargs)
                 if attempt > 0:
-                    console.log(
-                        f"[bold green]Succeeded[/] on attempt {attempt + 1} "
-                        f"after {attempt} failure(s)"
-                    )
+                    console.log(f"[bold green]Succeeded[/] on attempt {attempt + 1} " f"after {attempt} failure(s)")
                 return result
 
             except Exception as exc:
                 last_error = exc
 
                 if not self.is_retryable_error(exc):
-                    logger.debug(
-                        "Non-retryable error — propagating immediately: %s", exc
-                    )
+                    logger.debug("Non-retryable error — propagating immediately: %s", exc)
                     raise
 
                 delay = self._backoff_delay(attempt)
                 console.log(
                     f"[yellow]Attempt {attempt + 1} failed:[/] {exc}. "
-                    + (
-                        f"Retrying in {delay:.1f}s…"
-                        if attempt + 1 < self.max_attempts
-                        else "No more attempts."
-                    )
+                    + (f"Retrying in {delay:.1f}s…" if attempt + 1 < self.max_attempts else "No more attempts.")
                 )
                 logger.warning(
                     "Retryable error on attempt %d/%d: %s",
@@ -134,9 +120,7 @@ class RetryHandler:
                     await asyncio.sleep(delay)
 
         raise RetryExhaustedError(
-            message=(
-                f"All {self.max_attempts} attempt(s) failed for '{func.__name__}'"
-            ),
+            message=(f"All {self.max_attempts} attempt(s) failed for '{func.__name__}'"),
             last_error=last_error,
         )
 
@@ -230,9 +214,7 @@ class RetryHandler:
                 timeout=float(timeout_seconds),
             )
         except asyncio.TimeoutError:
-            raise TaskTimeoutError(
-                f"'{func.__name__}' exceeded the {timeout_seconds}s timeout"
-            )
+            raise TaskTimeoutError(f"'{func.__name__}' exceeded the {timeout_seconds}s timeout")
 
     # ------------------------------------------------------------------
     # Private helpers
