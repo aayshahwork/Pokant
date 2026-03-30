@@ -184,21 +184,20 @@ test.describe("Form submission with advanced fields", () => {
   }) => {
     let capturedBody: Record<string, unknown> = {};
 
-    await mockTaskList(page, []);
-    await openNewTaskPage(page);
-
-    // Register POST handler LAST so it has LIFO priority
     await page.route("**/api/v1/tasks", (route) => {
       if (route.request().method() !== "POST") { route.fallback(); return; }
       capturedBody = JSON.parse(route.request().postData() ?? "{}");
       route.fulfill({ status: 201, json: COMPLETED_TASK_FULL });
     });
+    await mockTaskList(page, []);
     await page.route(`**/api/v1/tasks/${COMPLETED_TASK_FULL.task_id}`, (route) =>
       route.fulfill({ status: 200, json: COMPLETED_TASK_FULL })
     );
     await page.route(`**/api/v1/tasks/${COMPLETED_TASK_FULL.task_id}/replay`, (route) =>
       route.fulfill({ status: 404, json: { error_code: "NOT_FOUND", message: "No replay" } })
     );
+
+    await openNewTaskPage(page);
 
     await page.getByLabel("URL *").fill("https://example.com");
     await page.getByLabel("Task Description *").fill("Extract the heading");
@@ -217,20 +216,20 @@ test.describe("Form submission with advanced fields", () => {
   }) => {
     let capturedBody: Record<string, unknown> = {};
 
-    await mockTaskList(page, []);
-    await openNewTaskPage(page);
-
     await page.route("**/api/v1/tasks", (route) => {
       if (route.request().method() !== "POST") { route.fallback(); return; }
       capturedBody = JSON.parse(route.request().postData() ?? "{}");
       route.fulfill({ status: 201, json: COMPLETED_TASK_FULL });
     });
+    await mockTaskList(page, []);
     await page.route(`**/api/v1/tasks/${COMPLETED_TASK_FULL.task_id}`, (route) =>
       route.fulfill({ status: 200, json: COMPLETED_TASK_FULL })
     );
     await page.route(`**/api/v1/tasks/${COMPLETED_TASK_FULL.task_id}/replay`, (route) =>
       route.fulfill({ status: 404, json: { error_code: "NOT_FOUND", message: "No replay" } })
     );
+
+    await openNewTaskPage(page);
 
     await page.getByLabel("URL *").fill("https://example.com");
     await page.getByLabel("Task Description *").fill("Extract the heading");
@@ -283,20 +282,20 @@ test.describe("Form submission with advanced fields", () => {
   }) => {
     let capturedBody: Record<string, unknown> = {};
 
-    await mockTaskList(page, []);
-    await openNewTaskPage(page);
-
     await page.route("**/api/v1/tasks", (route) => {
       if (route.request().method() !== "POST") { route.fallback(); return; }
       capturedBody = JSON.parse(route.request().postData() ?? "{}");
       route.fulfill({ status: 201, json: COMPLETED_TASK_FULL });
     });
+    await mockTaskList(page, []);
     await page.route(`**/api/v1/tasks/${COMPLETED_TASK_FULL.task_id}`, (route) =>
       route.fulfill({ status: 200, json: COMPLETED_TASK_FULL })
     );
     await page.route(`**/api/v1/tasks/${COMPLETED_TASK_FULL.task_id}/replay`, (route) =>
       route.fulfill({ status: 404, json: { error_code: "NOT_FOUND", message: "No replay" } })
     );
+
+    await openNewTaskPage(page);
 
     await page.getByLabel("URL *").fill("https://example.com");
     await page.getByLabel("Task Description *").fill("Extract the heading");
