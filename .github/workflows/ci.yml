@@ -18,7 +18,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install formatters
-        run: pip install black ruff
+        run: pip install 'black==24.10.0' ruff
       - name: black --check
         run: black --check sdk/computeruse/
       - name: ruff check

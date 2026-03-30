@@ -134,10 +134,7 @@ class StuckDetector:
 
     def _evaluate(self) -> StuckSignal:
         # Visual stagnation
-        if (
-            len(self._screenshot_hashes) >= self.screenshot_threshold
-            and len(set(self._screenshot_hashes)) == 1
-        ):
+        if len(self._screenshot_hashes) >= self.screenshot_threshold and len(set(self._screenshot_hashes)) == 1:
             return StuckSignal(
                 detected=True,
                 reason="visual_stagnation",
@@ -146,10 +143,7 @@ class StuckDetector:
             )
 
         # Action repetition
-        if (
-            len(self._recent_actions) >= self.action_threshold
-            and len(set(self._recent_actions)) == 1
-        ):
+        if len(self._recent_actions) >= self.action_threshold and len(set(self._recent_actions)) == 1:
             action = self._recent_actions[0]
             return StuckSignal(
                 detected=True,

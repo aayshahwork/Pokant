@@ -195,9 +195,7 @@ class TaskExecutor:
 
                 async_db_session = get_async_session_factory()()
                 encryption_cache = EncryptionKeyCache(worker_settings.ENCRYPTION_MASTER_KEY)
-                redis_client = redis_lib.Redis.from_url(
-                    worker_settings.REDIS_URL, decode_responses=True
-                )
+                redis_client = redis_lib.Redis.from_url(worker_settings.REDIS_URL, decode_responses=True)
                 session_manager = SessionManager(async_db_session, encryption_cache, redis_client)
             except Exception as exc:
                 logger.warning("Failed to initialise SessionManager: %s", exc)
@@ -228,6 +226,7 @@ class TaskExecutor:
                         session_restored = True
                         logger.info("Restored %d cookies for %s", len(cookies), domain)
                         from workers.metrics import celery_session_restored_total
+
                         celery_session_restored_total.labels(domain=domain).inc()
                 except Exception as exc:
                     logger.warning("Session restore failed: %s", exc)
@@ -239,15 +238,17 @@ class TaskExecutor:
             step_start = time.monotonic()
             await self._navigate_with_retry(page, self.config.url)
             screenshot_bytes = await page.screenshot(type="jpeg", quality=85)
-            self.steps.append(StepData(
-                step_number=1,
-                timestamp=datetime.now(timezone.utc),
-                action_type=ActionType.NAVIGATE,
-                description=f"Navigated to {self.config.url}",
-                screenshot_bytes=screenshot_bytes,
-                duration_ms=int((time.monotonic() - step_start) * 1000),
-                success=True,
-            ))
+            self.steps.append(
+                StepData(
+                    step_number=1,
+                    timestamp=datetime.now(timezone.utc),
+                    action_type=ActionType.NAVIGATE,
+                    description=f"Navigated to {self.config.url}",
+                    screenshot_bytes=screenshot_bytes,
+                    duration_ms=int((time.monotonic() - step_start) * 1000),
+                    success=True,
+                )
+            )
 
             # -- Hook D: Verify restored session --
             if session_restored:
@@ -256,6 +257,7 @@ class TaskExecutor:
                     logger.warning("Stale session for %s", domain)
                     session_restored = False
                     from workers.metrics import celery_session_stale_total
+
                     celery_session_stale_total.labels(domain=domain).inc()
 
             # -- Step 4: Run browser_use Agent --
@@ -276,6 +278,7 @@ class TaskExecutor:
                     )
                     logger.info("Saved %d cookies for %s", len(cookies), domain)
                     from workers.metrics import celery_session_saved_total
+
                     celery_session_saved_total.labels(domain=domain).inc()
                 except Exception as exc:
                     logger.warning("Failed to save session: %s", exc)
@@ -288,13 +291,16 @@ class TaskExecutor:
             if stuck_signal.detected:
                 logger.warning(
                     "Post-execution stuck analysis: reason=%s step=%d details=%s",
-                    stuck_signal.reason, stuck_signal.step_number, stuck_signal.details,
+                    stuck_signal.reason,
+                    stuck_signal.step_number,
+                    stuck_signal.details,
                 )
                 from workers.metrics import (
                     celery_stuck_action_repetition_total,
                     celery_stuck_failure_spiral_total,
                     celery_stuck_visual_stagnation_total,
                 )
+
                 _stuck_metric_map = {
                     "visual_stagnation": celery_stuck_visual_stagnation_total,
                     "action_repetition": celery_stuck_action_repetition_total,
@@ -356,12 +362,11 @@ class TaskExecutor:
                 except Exception as exc:
                     logger.warning("Error releasing browser: %s", exc)
 
-    async def _execute_with_agent(
-        self, browser: Any, config: TaskConfig
-    ) -> Any:
+    async def _execute_with_agent(self, browser: Any, config: TaskConfig) -> Any:
         prompt = self._build_task_prompt(config)
 
         from langchain_anthropic import ChatAnthropic
+
         llm = ChatAnthropic(
             model_name=self.model,
             anthropic_api_key=worker_settings.ANTHROPIC_API_KEY,
@@ -369,6 +374,7 @@ class TaskExecutor:
         )
 
         from browser_use import Agent
+
         agent = Agent(
             task=prompt,
             llm=llm,
@@ -379,15 +385,14 @@ class TaskExecutor:
 
         try:
             import inspect
+
             run_kwargs: dict[str, Any] = {"max_steps": config.max_steps}
             if "on_step_end" in inspect.signature(agent.run).parameters:
                 run_kwargs["on_step_end"] = self._on_step_end
             result = await agent.run(**run_kwargs)
             return result
         except Exception as exc:
-            raise TaskExecutionError(
-                f"Browser Use agent failed: {exc}"
-            ) from exc
+            raise TaskExecutionError(f"Browser Use agent failed: {exc}") from exc
 
     def _on_agent_step(self, *args: Any, **kwargs: Any) -> None:
         step_number = len(self.steps) + 1
@@ -415,13 +420,16 @@ class TaskExecutor:
             if signal.detected:
                 logger.warning(
                     "Stuck agent detected: reason=%s step=%d details=%s",
-                    signal.reason, signal.step_number, signal.details,
+                    signal.reason,
+                    signal.step_number,
+                    signal.details,
                 )
                 from workers.metrics import (
                     celery_stuck_action_repetition_total,
                     celery_stuck_failure_spiral_total,
                     celery_stuck_visual_stagnation_total,
                 )
+
                 _metric_map = {
                     "visual_stagnation": celery_stuck_visual_stagnation_total,
                     "action_repetition": celery_stuck_action_repetition_total,
@@ -474,9 +482,7 @@ class TaskExecutor:
     # Navigation with transient-error retry
     # ------------------------------------------------------------------
 
-    async def _navigate_with_retry(
-        self, page: Any, url: str, max_attempts: int = 3
-    ) -> None:
+    async def _navigate_with_retry(self, page: Any, url: str, max_attempts: int = 3) -> None:
         """Navigate to *url* with retry for transient network errors."""
         for attempt in range(max_attempts):
             try:
@@ -488,7 +494,7 @@ class TaskExecutor:
                 is_transient = any(p in msg for p in transient_patterns)
                 if not is_transient or attempt == max_attempts - 1:
                     raise
-                delay = 2 ** attempt
+                delay = 2**attempt
                 logger.warning(
                     "Navigation failed (attempt %d/%d): %s. Retrying in %ds",
                     attempt + 1,
@@ -497,6 +503,7 @@ class TaskExecutor:
                     delay,
                 )
                 from workers.metrics import celery_navigation_retry_total
+
                 celery_navigation_retry_total.inc()
                 await asyncio.sleep(delay)
 
@@ -529,10 +536,12 @@ class TaskExecutor:
                 step_index = i + 1  # offset for navigate step
                 if step_index >= len(self.steps):
                     # History has more entries than callback produced — append
-                    self.steps.append(StepData(
-                        step_number=len(self.steps) + 1,
-                        timestamp=datetime.now(timezone.utc),
-                    ))
+                    self.steps.append(
+                        StepData(
+                            step_number=len(self.steps) + 1,
+                            timestamp=datetime.now(timezone.utc),
+                        )
+                    )
 
                 step = self.steps[step_index]
 
@@ -643,13 +652,9 @@ class TaskExecutor:
             config.task,
         ]
         if config.output_schema:
-            lines.append(
-                f"Extract data matching this schema: {json.dumps(config.output_schema)}"
-            )
+            lines.append(f"Extract data matching this schema: {json.dumps(config.output_schema)}")
         if config.credentials:
-            lines.append(
-                "When you encounter a login form, use the available credential injection tool."
-            )
+            lines.append("When you encounter a login form, use the available credential injection tool.")
         return "\n\n".join(lines)
 
     async def _execute_tool(self, page: Any, tool_name: str, tool_input: Dict[str, Any]) -> str:
@@ -764,8 +769,7 @@ class TaskExecutor:
             )
 
         sections.append(
-            'When the task is fully complete, use the "done" tool. '
-            f"You have at most {config.max_steps} actions."
+            'When the task is fully complete, use the "done" tool. ' f"You have at most {config.max_steps} actions."
         )
 
         return "\n\n".join(sections)
