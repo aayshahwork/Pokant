@@ -2,11 +2,36 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass, fields as dc_fields
+from dataclasses import asdict, dataclass, field, fields as dc_fields
 from datetime import datetime
+from enum import StrEnum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+
+
+class ActionType(StrEnum):
+    """Categories of browser actions the agent can perform."""
+
+    NAVIGATE = "navigate"
+    CLICK = "click"
+    TYPE = "type"
+    SCROLL = "scroll"
+    EXTRACT = "extract"
+    WAIT = "wait"
+    INJECT_CREDENTIALS = "inject_credentials"
+    SOLVE_CAPTCHA = "solve_captcha"
+    UNKNOWN = "unknown"
+    # Native executor actions (computer_20251124)
+    MOUSE_MOVE = "mouse_move"
+    KEY_PRESS = "key_press"
+    DOUBLE_CLICK = "double_click"
+    RIGHT_CLICK = "right_click"
+    MIDDLE_CLICK = "middle_click"
+    SCREENSHOT = "screenshot"
+    DRAG = "drag"
+    TRIPLE_CLICK = "triple_click"
+    ZOOM = "zoom"
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +221,11 @@ class TaskResult:
     duration_ms: int = 0
     created_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    cost_cents: float = 0.0
+    total_tokens_in: int = 0
+    total_tokens_out: int = 0
+    error_category: Optional[str] = None
+    step_data: List[Any] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-compatible dict.
@@ -254,18 +284,18 @@ class StepData(BaseModel):
         description="1-based index of this step within the task run",
     )
     action_type: str = Field(
-        ...,
+        default="unknown",
         description=(
             "Category of action taken. Common values: "
             "'click', 'type', 'navigate', 'scroll', 'select', 'wait', 'extract'"
         ),
     )
     description: str = Field(
-        ...,
+        default="",
         description="Human-readable summary of what this step did",
     )
     screenshot_path: str = Field(
-        ...,
+        default="",
         description=(
             "Filesystem path to the PNG screenshot captured immediately "
             "after this step executed. Empty string if no screenshot was taken."
@@ -276,7 +306,7 @@ class StepData(BaseModel):
         description="Serialised DOM snapshot at this step, if captured by the agent",
     )
     success: bool = Field(
-        ...,
+        default=True,
         description="Whether this individual step completed without error",
     )
     error: Optional[str] = Field(
@@ -286,6 +316,27 @@ class StepData(BaseModel):
     timestamp: datetime = Field(
         ...,
         description="UTC timestamp when this step was executed",
+    )
+    screenshot_bytes: Optional[bytes] = Field(
+        default=None,
+        exclude=True,
+        description="Raw screenshot bytes, used by replay generator",
+    )
+    tokens_in: int = Field(
+        default=0,
+        description="Input tokens consumed by LLM for this step",
+    )
+    tokens_out: int = Field(
+        default=0,
+        description="Output tokens produced by LLM for this step",
+    )
+    duration_ms: int = Field(
+        default=0,
+        description="Wall-clock duration of this step in milliseconds",
+    )
+    reasoning: Optional[str] = Field(
+        default=None,
+        description="LLM reasoning text for this step",
     )
 
 

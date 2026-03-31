@@ -93,6 +93,7 @@ os.environ.setdefault("REPLAY_DIR", "./replays")
 # boto3 ────────────────────────────────────────────────────────────────────
 _boto3 = _stub("boto3", client=MagicMock)
 _botocore = _stub("botocore")
+_botocore_config = _stub("botocore.config", Config=MagicMock)
 _botocore_exceptions = _stub(
     "botocore.exceptions",
     BotoCoreError=Exception,

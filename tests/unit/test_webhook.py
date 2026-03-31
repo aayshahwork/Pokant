@@ -170,7 +170,7 @@ class TestWebhookPayload:
             "task_id": str(uuid.uuid4()),
             "status": "completed",
             "result": {"data": "value"},
-            "replay_url": "https://r2.computeruse.dev/replays/123/replay.html",
+            "replay_url": "https://example.com/replays/123/replay.html",
             "duration_ms": 5000,
         }
 
@@ -193,9 +193,11 @@ class TestWebhookPayload:
 
     def test_replay_url_none_when_no_s3_key(self):
         """replay_url should be None when task has no replay_s3_key."""
+        from api.services.r2 import presign_replay
+
         replay_s3_key = None
         replay_url = (
-            f"https://r2.computeruse.dev/{replay_s3_key}"
+            presign_replay(replay_s3_key)
             if replay_s3_key
             else None
         )

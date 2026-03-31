@@ -31,6 +31,7 @@ from api.models.task_step import TaskStep
 from api.schemas.task import ErrorResponse, StepResponse, TaskCreateRequest, TaskListResponse, TaskResponse
 from shared.constants import TIER_LIMITS
 from api.services.audit_logger import TASK_CANCELLED, TASK_CREATED, TASK_RETRIED, AuditLogger
+from api.services.r2 import presign_replay, presign_screenshot
 from shared.url_validator import SSRFBlockedError, validate_url_async, validate_webhook_url
 
 logger = structlog.get_logger("api.tasks")
@@ -455,7 +456,7 @@ async def get_task_steps(
             action_type=s.action_type,
             description=s.description,
             screenshot_url=(
-                f"https://r2.computeruse.dev/{s.screenshot_s3_key}?signed=true"
+                presign_screenshot(s.screenshot_s3_key)
                 if s.screenshot_s3_key
                 else None
             ),
@@ -500,12 +501,11 @@ async def get_replay(
             detail={"error_code": "NOT_FOUND", "message": "Replay not available yet."},
         )
 
-    # In production: generate a pre-signed URL from R2/S3 with 7-day expiry
-    # signed_url = s3_client.generate_presigned_url(
-    #     "get_object",
-    #     Params={"Bucket": settings.R2_BUCKET_NAME, "Key": task.replay_s3_key},
-    #     ExpiresIn=7 * 86400,
-    # )
-    signed_url = f"https://r2.computeruse.dev/{task.replay_s3_key}?signed=true"
+    signed_url = presign_replay(task.replay_s3_key)
+    if signed_url is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error_code": "STORAGE_UNAVAILABLE", "message": "Replay signing is unavailable."},
+        )
 
     return {"task_id": str(task_id), "replay_url": signed_url}

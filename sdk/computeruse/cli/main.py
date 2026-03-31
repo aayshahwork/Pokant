@@ -17,8 +17,10 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import sys
 import webbrowser
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -370,6 +372,243 @@ def _print_result(result) -> None:  # type: ignore[no-untyped-def]
 
         console.print(Panel(data_table, title="[bold]Extracted Data[/bold]", border_style="cyan"))
 
+
+# ---------------------------------------------------------------------------
+# info
+# ---------------------------------------------------------------------------
+
+
+@cli.command()
+@click.option(
+    "--data-dir",
+    default=".observius",
+    show_default=True,
+    help="Data directory.",
+)
+def info(data_dir: str) -> None:
+    """Show summary of Observius run data."""
+    base = Path(data_dir)
+    runs_dir = base / "runs"
+    screenshots_dir = base / "screenshots"
+
+    # -- Load runs ---------------------------------------------------------
+    runs: list[dict] = []
+    if runs_dir.is_dir():
+        for f in runs_dir.glob("*.json"):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and "task_id" in data:
+                    runs.append(data)
+            except (OSError, json.JSONDecodeError):
+                continue
+
+    total = len(runs)
+    completed = sum(1 for r in runs if r.get("status") == "completed")
+    failed = sum(1 for r in runs if r.get("status") == "failed")
+    timeout = sum(
+        1 for r in runs
+        if r.get("error_category") == "timeout" or r.get("status") == "timeout"
+    )
+    other = total - completed - failed - timeout
+    total_cost_cents = sum(r.get("cost_cents", 0) for r in runs)
+
+    # -- Screenshot stats --------------------------------------------------
+    ss_count = 0
+    ss_bytes = 0
+    if screenshots_dir.is_dir():
+        for img in screenshots_dir.rglob("*.png"):
+            ss_count += 1
+            try:
+                ss_bytes += img.stat().st_size
+            except OSError:
+                pass
+
+    if ss_bytes >= 1_048_576:
+        ss_size = f"{ss_bytes / 1_048_576:.1f} MB"
+    elif ss_bytes >= 1024:
+        ss_size = f"{ss_bytes / 1024:.1f} KB"
+    else:
+        ss_size = f"{ss_bytes} B"
+
+    # -- Render output -----------------------------------------------------
+    from rich.table import Table  # noqa: E402 (already imported at top, but fine)
+
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="dim")
+    grid.add_column()
+
+    status_parts = [f"{completed} completed", f"{failed} failed", f"{timeout} timeout"]
+    if other:
+        status_parts.append(f"{other} other")
+
+    grid.add_row("Runs", f"{total} ({', '.join(status_parts)})")
+
+    if total:
+        success_rate = completed / total * 100
+        grid.add_row("Success rate", f"{success_rate:.1f}%")
+
+    grid.add_row("Total cost", f"${total_cost_cents / 100:.2f}")
+    grid.add_row("Screenshots", f"{ss_count} files ({ss_size})")
+
+    console.print(
+        Panel(grid, title=f"[bold]Observius[/bold] [dim]{data_dir}/[/dim]", border_style="cyan")
+    )
+
+
+# ---------------------------------------------------------------------------
+# dashboard
+# ---------------------------------------------------------------------------
+
+
+@cli.command()
+@click.option(
+    "--data-dir",
+    default=".observius",
+    show_default=True,
+    help="Data directory.",
+)
+@click.option(
+    "--port",
+    default=8080,
+    show_default=True,
+    help="Port to serve on.",
+)
+def dashboard(data_dir: str, port: int) -> None:
+    """Launch local debugging dashboard."""
+    try:
+        from computeruse.dashboard import create_app  # noqa: F811
+    except ImportError:
+        err_console.print("[bold red]Dashboard requires extra dependencies.[/bold red]")
+        err_console.print("Install with:  [cyan]pip install observius\\[dashboard][/cyan]")
+        raise SystemExit(1)
+
+    import uvicorn  # noqa: F811
+
+    app = create_app(data_dir)
+    console.print(f"[bold]Observius Dashboard[/bold]: [cyan]http://localhost:{port}[/cyan]")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+
+
+# ---------------------------------------------------------------------------
+# clean
+# ---------------------------------------------------------------------------
+
+
+def _parse_duration(value: str) -> int:
+    """Parse a human duration string (e.g. '7d', '24h', '30m') to seconds."""
+    m = re.fullmatch(r"(\d+)\s*([dhm])", value.strip().lower())
+    if not m:
+        raise click.BadParameter(
+            f"Invalid duration '{value}'. Use e.g. 7d, 24h, 30m.",
+            param_hint="'--older-than'",
+        )
+    amount = int(m.group(1))
+    unit = m.group(2)
+    multipliers = {"d": 86400, "h": 3600, "m": 60}
+    return amount * multipliers[unit]
+
+
+@cli.command()
+@click.option(
+    "--data-dir",
+    default=".observius",
+    show_default=True,
+    help="Data directory.",
+)
+@click.option(
+    "--older-than",
+    default="7d",
+    show_default=True,
+    help="Delete runs older than this (e.g. 7d, 24h, 30m).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show what would be deleted without deleting.",
+)
+def clean(data_dir: str, older_than: str, dry_run: bool) -> None:
+    """Delete old run data."""
+    base = Path(data_dir)
+    runs_dir = base / "runs"
+    screenshots_dir = base / "screenshots"
+    replays_dir = base / "replays"
+
+    threshold_seconds = _parse_duration(older_than)
+    now = datetime.now(timezone.utc)
+
+    if not runs_dir.is_dir():
+        console.print("[yellow]No runs directory found.[/yellow]")
+        return
+
+    to_delete: list[dict] = []
+
+    for f in runs_dir.glob("*.json"):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict) or "task_id" not in data:
+            continue
+
+        created_at = data.get("completed_at") or data.get("created_at")
+        if not created_at:
+            continue
+
+        try:
+            ts = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+
+        age_seconds = (now - ts).total_seconds()
+        if age_seconds > threshold_seconds:
+            to_delete.append({"file": f, "data": data})
+
+    if not to_delete:
+        console.print(f"[green]No runs older than {older_than} found.[/green]")
+        return
+
+    label = "[bold yellow]DRY RUN[/bold yellow] " if dry_run else ""
+
+    for item in to_delete:
+        task_id = item["data"]["task_id"]
+        run_file: Path = item["file"]
+        ss_dir = screenshots_dir / task_id
+        replay_file = replays_dir / f"{task_id}.html"
+
+        parts = [str(run_file)]
+        if ss_dir.is_dir():
+            parts.append(str(ss_dir) + "/")
+        if replay_file.is_file():
+            parts.append(str(replay_file))
+
+        console.print(f"  {label}[red]delete[/red] {', '.join(parts)}")
+
+        if not dry_run:
+            try:
+                run_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+            if ss_dir.is_dir():
+                import shutil
+
+                shutil.rmtree(ss_dir, ignore_errors=True)
+            if replay_file.is_file():
+                try:
+                    replay_file.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    action = "Would delete" if dry_run else "Deleted"
+    console.print(f"\n[bold]{action} {len(to_delete)} run(s).[/bold]")
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+# (existing _print_result is above)
 
 # ---------------------------------------------------------------------------
 # Entry point

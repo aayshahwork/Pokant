@@ -49,6 +49,39 @@ class SessionResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# GET /api/v1/sessions
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "",
+    response_model=list[SessionResponse],
+)
+async def list_sessions(
+    account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_db),
+) -> list[SessionResponse]:
+    """List all browser sessions for this account."""
+    stmt = (
+        select(Session)
+        .where(Session.account_id == account.id)
+        .order_by(Session.last_used_at.desc())
+    )
+    result = await db.execute(stmt)
+    sessions = result.scalars().all()
+    return [
+        SessionResponse(
+            session_id=s.id,
+            origin_domain=s.origin_domain,
+            auth_state=s.auth_state,
+            last_used_at=s.last_used_at,
+            expires_at=s.expires_at,
+            created_at=s.created_at,
+        )
+        for s in sessions
+    ]
+
+
+# ---------------------------------------------------------------------------
 # POST /api/v1/sessions
 # ---------------------------------------------------------------------------
 

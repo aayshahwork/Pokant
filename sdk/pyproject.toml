@@ -21,6 +21,9 @@ dependencies = [
     "aiohttp>=3.9.0",
 ]
 
+[project.optional-dependencies]
+dashboard = ["fastapi>=0.100", "uvicorn>=0.24"]
+
 [project.urls]
 Homepage = "https://computeruse.dev"
 
@@ -30,3 +33,9 @@ computeruse = "computeruse.cli.main:cli"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["computeruse*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.setuptools.package-data]
+computeruse = ["templates/*.html", "templates/*.css", "static/*.html"]

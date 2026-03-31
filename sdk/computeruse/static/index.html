@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Observius Dashboard</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#c9d1d9;--dim:#8b949e;
+--green:#3fb950;--red:#f85149;--yellow:#d29922;--blue:#58a6ff;--cyan:#39d2c0;--purple:#bc8cff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;background:var(--bg);color:var(--text);font-size:14px}
+a{color:var(--blue);text-decoration:none}
+.header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+.header h1{font-size:16px;font-weight:600;color:var(--text)}
+.tabs{display:flex;gap:4px}
+.tab{padding:6px 16px;border-radius:6px;cursor:pointer;color:var(--dim);font-size:13px;border:1px solid transparent}
+.tab:hover{color:var(--text)}.tab.active{color:var(--text);background:var(--bg);border-color:var(--border)}
+.container{max-width:1200px;margin:0 auto;padding:24px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:8px 12px;color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid var(--border)}
+tr.row:hover{background:var(--surface);cursor:pointer}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dot.completed{background:var(--green)}.dot.failed{background:var(--red)}.dot.timeout{background:var(--yellow)}
+.mono{font-family:monospace;font-size:12px;color:var(--dim)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
+.card h3{font-size:13px;color:var(--dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.card .val{font-size:24px;font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px}
+.back{cursor:pointer;color:var(--blue);font-size:13px;margin-bottom:16px;display:inline-block}
+.back:hover{text-decoration:underline}
+.detail-header{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.detail-header .card{margin-bottom:0}
+.timeline{display:flex;gap:2px;margin-bottom:24px;height:32px;border-radius:4px;overflow:hidden}
+.timeline .seg{flex:1;min-width:4px;position:relative;cursor:pointer}
+.timeline .seg.ok{background:var(--green)}.timeline .seg.err{background:var(--red)}.timeline .seg.active{outline:2px solid var(--blue);outline-offset:1px;z-index:1}
+.screenshot-viewer{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;margin-bottom:16px}
+.screenshot-viewer img{max-width:100%;max-height:500px;border-radius:4px}
+.screenshot-nav{display:flex;justify-content:center;gap:12px;margin-top:12px}
+.screenshot-nav button{padding:6px 16px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer}
+.screenshot-nav button:hover{border-color:var(--blue)}
+.screenshot-nav button:disabled{opacity:.3;cursor:default}
+.step-meta{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px}
+.step-meta dt{color:var(--dim);font-size:12px;margin-top:8px}.step-meta dd{margin-left:0}
+.bar-chart .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.bar-chart .bar-label{width:120px;font-size:12px;color:var(--dim);text-align:right;flex-shrink:0}
+.bar-chart .bar-track{flex:1;height:20px;background:var(--bg);border-radius:4px;overflow:hidden}
+.bar-chart .bar-fill{height:100%;border-radius:4px;transition:width .3s}
+.bar-chart .bar-count{width:40px;font-size:12px;color:var(--dim)}
+.empty{text-align:center;padding:48px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Observius</h1>
+  <div class="tabs">
+    <div class="tab" data-tab="runs" onclick="navigate('#/')">Runs</div>
+    <div class="tab" data-tab="stats" onclick="navigate('#/stats')">Stats</div>
+  </div>
+</div>
+<div class="container" id="app"></div>
+<script>
+const $ = id => document.getElementById(id);
+let runs = [], currentStep = 0;
+
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  return r.json();
+}
+
+function navigate(hash) { location.hash = hash; }
+function fmtDuration(ms) { return ms < 1000 ? ms + 'ms' : (ms / 1000).toFixed(1) + 's'; }
+function fmtCost(cents) { return '$' + (cents / 100).toFixed(2); }
+function fmtTime(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+function truncId(id) { return id.length > 12 ? id.slice(0, 8) + '...' : id; }
+
+function renderRuns() {
+  document.querySelector('[data-tab="runs"]').classList.add('active');
+  document.querySelector('[data-tab="stats"]').classList.remove('active');
+  if (!runs.length) { $('app').innerHTML = '<div class="empty">No runs found</div>'; return; }
+  const sorted = [...runs].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  $('app').innerHTML = `<table>
+    <thead><tr><th>Status</th><th>Task ID</th><th>Steps</th><th>Duration</th><th>Cost</th><th>Error</th><th>Time</th></tr></thead>
+    <tbody>${sorted.map(r => `<tr class="row" onclick="navigate('#/run/${r.task_id}')">
+      <td><span class="dot ${r.status}"></span>${r.status}</td>
+      <td class="mono">${truncId(r.task_id)}</td>
+      <td>${r.step_count || 0}</td>
+      <td>${fmtDuration(r.duration_ms || 0)}</td>
+      <td>${fmtCost(r.cost_cents || 0)}</td>
+      <td class="mono">${r.error_category || '-'}</td>
+      <td class="mono">${fmtTime(r.created_at)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function renderDetail(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const run = runs.find(r => r.task_id === id);
+  if (!run) { $('app').innerHTML = '<div class="empty">Run not found</div>'; return; }
+  const steps = run.steps || [];
+  currentStep = 0;
+
+  function stepHTML(i) {
+    const s = steps[i];
+    if (!s) return '<div class="step-meta"><p>No step data</p></div>';
+    return `<dl class="step-meta">
+      <dt>Step</dt><dd>${i + 1} of ${steps.length}</dd>
+      <dt>Action</dt><dd>${s.action_type || '-'}</dd>
+      <dt>Description</dt><dd>${s.description || '-'}</dd>
+      <dt>Duration</dt><dd>${s.duration_ms ? fmtDuration(s.duration_ms) : '-'}</dd>
+      <dt>Success</dt><dd>${s.success !== false ? 'Yes' : 'No'}</dd>
+      <dt>Tokens</dt><dd>${(s.tokens_in || 0)} in / ${(s.tokens_out || 0)} out</dd>
+    </dl>`;
+  }
+
+  function screenshotHTML(i) {
+    const s = steps[i];
+    if (!s || !s.screenshot_path) return '<div class="screenshot-viewer"><p style="color:var(--dim)">No screenshot</p></div>';
+    return `<div class="screenshot-viewer">
+      <img src="/screenshots/${encodeURIComponent(s.screenshot_path)}" onerror="this.parentElement.innerHTML='<p style=color:var(--dim)>Screenshot not available</p>'" />
+    </div>`;
+  }
+
+  function update() {
+    const sv = document.getElementById('ss-viewer');
+    const sm = document.getElementById('step-meta');
+    if (sv) sv.innerHTML = screenshotHTML(currentStep);
+    if (sm) sm.innerHTML = stepHTML(currentStep);
+    document.querySelectorAll('.timeline .seg').forEach((s, i) => s.classList.toggle('active', i === currentStep));
+    const prev = document.getElementById('btn-prev');
+    const next = document.getElementById('btn-next');
+    if (prev) prev.disabled = currentStep <= 0;
+    if (next) next.disabled = currentStep >= steps.length - 1;
+  }
+
+  $('app').innerHTML = `
+    <div class="back" onclick="navigate('#/')">&larr; Back to runs</div>
+    <div class="detail-header">
+      <div class="card"><h3>Task</h3><div class="mono">${run.task_id}</div>
+        <div style="margin-top:8px"><span class="dot ${run.status}"></span>${run.status}</div></div>
+      <div class="card"><h3>Metrics</h3>
+        <div>Steps: ${run.step_count || 0} &middot; Duration: ${fmtDuration(run.duration_ms || 0)} &middot; Cost: ${fmtCost(run.cost_cents || 0)}</div>
+        <div class="mono" style="margin-top:4px">${fmtTime(run.created_at)}${run.error ? ' &middot; Error: ' + run.error : ''}</div></div>
+    </div>
+    ${steps.length ? `<div class="timeline">${steps.map((s, i) =>
+      `<div class="seg ${s.success !== false ? 'ok' : 'err'}${i === 0 ? ' active' : ''}" onclick="window._goStep(${i})" title="Step ${i+1}: ${s.action_type || ''}"></div>`
+    ).join('')}</div>` : ''}
+    <div id="ss-viewer">${screenshotHTML(0)}</div>
+    <div class="screenshot-nav"><button id="btn-prev" onclick="window._goStep(currentStep-1)" disabled>&larr; Prev</button>
+      <button id="btn-next" onclick="window._goStep(currentStep+1)" ${steps.length <= 1 ? 'disabled' : ''}>Next &rarr;</button></div>
+    <div id="step-meta">${stepHTML(0)}</div>`;
+
+  window._goStep = function(i) { currentStep = Math.max(0, Math.min(i, steps.length - 1)); update(); };
+}
+
+function renderStats() {
+  document.querySelector('[data-tab="runs"]').classList.remove('active');
+  document.querySelector('[data-tab="stats"]').classList.add('active');
+  fetchJSON('/api/stats').then(stats => {
+    if (!stats) { $('app').innerHTML = '<div class="empty">No data</div>'; return; }
+    const cats = stats.error_categories || {};
+    const maxCat = Math.max(1, ...Object.values(cats));
+    const colors = {'rate_limit':' var(--yellow)','browser':'var(--red)','network':'var(--purple)','timeout':'var(--yellow)','auth':'var(--red)','llm':'var(--cyan)'};
+    $('app').innerHTML = `
+      <div class="grid">
+        <div class="card"><h3>Total Runs</h3><div class="val">${stats.total_runs}</div></div>
+        <div class="card"><h3>Success Rate</h3><div class="val" style="color:var(--green)">${stats.success_rate}%</div></div>
+        <div class="card"><h3>Total Cost</h3><div class="val">${fmtCost(stats.total_cost_cents)}</div></div>
+        <div class="card"><h3>Avg Duration</h3><div class="val">${fmtDuration(stats.avg_duration_ms)}</div></div>
+      </div>
+      <div class="card"><h3>Status Breakdown</h3>
+        <div style="margin-top:8px">Completed: ${stats.completed} &middot; Failed: ${stats.failed} &middot; Timeout: ${stats.timeout}</div></div>
+      ${Object.keys(cats).length ? `<div class="card"><h3>Error Categories</h3><div class="bar-chart" style="margin-top:12px">
+        ${Object.entries(cats).map(([k,v]) => `<div class="bar-row">
+          <div class="bar-label">${k}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${(v/maxCat*100).toFixed(0)}%;background:${colors[k]||'var(--blue)'}"></div></div>
+          <div class="bar-count">${v}</div></div>`).join('')}
+      </div></div>` : ''}`;
+  });
+}
+
+async function init() {
+  runs = await fetchJSON('/api/runs') || [];
+  route();
+}
+
+function route() {
+  const h = location.hash || '#/';
+  if (h.startsWith('#/run/')) renderDetail(decodeURIComponent(h.slice(6)));
+  else if (h === '#/stats') renderStats();
+  else renderRuns();
+}
+
+window.addEventListener('hashchange', route);
+init();
+</script>
+</body>
+</html>

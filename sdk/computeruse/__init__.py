@@ -31,7 +31,15 @@ from computeruse.exceptions import (
     TimeoutError,
     ValidationError,
 )
-from computeruse.models import TaskConfig, TaskResult
+from computeruse.models import ActionType, StepData, TaskConfig, TaskResult
+
+from computeruse.cost import COST_PER_M_INPUT, COST_PER_M_OUTPUT, calculate_cost_cents, calculate_cost_from_steps
+from computeruse.error_classifier import ClassifiedError, ErrorCategory, classify_error, classify_error_message
+from computeruse.replay_generator import ReplayGenerator
+from computeruse.retry_policy import MAX_DELAY_SECONDS, RETRIABLE_CATEGORIES, RetryDecision, should_retry_task
+from computeruse.stuck_detector import StuckDetector, StuckSignal
+from computeruse.track import TrackConfig, TrackedPage, track
+from computeruse.wrap import WrappedAgent, WrapConfig, wrap
 
 __version__ = "0.1.0"
 
@@ -57,6 +65,32 @@ __all__ = [
     # Backward-compatible aliases
     "ComputerUseError",
     "TimeoutError",
+    # Reliability features
+    "ActionType",
+    "StepData",
+    "ErrorCategory",
+    "ClassifiedError",
+    "classify_error",
+    "classify_error_message",
+    "RetryDecision",
+    "should_retry_task",
+    "RETRIABLE_CATEGORIES",
+    "MAX_DELAY_SECONDS",
+    "StuckDetector",
+    "StuckSignal",
+    "ReplayGenerator",
+    "calculate_cost_cents",
+    "calculate_cost_from_steps",
+    "COST_PER_M_INPUT",
+    "COST_PER_M_OUTPUT",
+    # Tracking
+    "track",
+    "TrackedPage",
+    "TrackConfig",
+    # Wrapper
+    "wrap",
+    "WrappedAgent",
+    "WrapConfig",
     # Metadata
     "__version__",
 ]

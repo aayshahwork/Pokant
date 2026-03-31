@@ -154,7 +154,7 @@ export class ApiClient {
   // Note: Endpoint doesn't exist yet — returns defaults on 404, throws on 401/500
   async getUsage(): Promise<UsageResponse> {
     try {
-      return await apiCall<UsageResponse>("/api/v1/account/usage", {
+      return await apiCall<UsageResponse>("/api/v1/billing/usage", {
         headers: this.headers,
       });
     } catch (error) {

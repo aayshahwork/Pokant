@@ -596,12 +596,14 @@ def deliver_webhook(self, task_id: str, webhook_url: str) -> None:
         account = session.get(Account, task.account_id)
 
         # Build payload
+        from api.services.r2 import presign_replay
+
         payload = {
             "task_id": task_id,
             "status": task.status,
             "result": task.result,
             "replay_url": (
-                f"https://r2.computeruse.dev/{task.replay_s3_key}"
+                presign_replay(task.replay_s3_key)
                 if task.replay_s3_key
                 else None
             ),
