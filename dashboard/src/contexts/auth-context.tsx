@@ -8,8 +8,6 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { ApiClient } from "@/lib/api-client";
-
 // MVP: raw API key in localStorage. XSS-vulnerable.
 // Swap to httpOnly cookie via BFF in production.
 const STORAGE_KEY = "computeruse_api_key";
@@ -17,7 +15,7 @@ const STORAGE_KEY = "computeruse_api_key";
 interface AuthState {
   apiKey: string | null;
   isLoading: boolean;
-  login: (key: string) => Promise<boolean>;
+  login: (key: string) => void;
   logout: () => void;
 }
 
@@ -33,14 +31,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (key: string): Promise<boolean> => {
-    const client = new ApiClient(key);
-    const valid = await client.validateKey();
-    if (valid) {
-      localStorage.setItem(STORAGE_KEY, key);
-      setApiKey(key);
-    }
-    return valid;
+  const login = useCallback((key: string): void => {
+    localStorage.setItem(STORAGE_KEY, key);
+    setApiKey(key);
   }, []);
 
   const logout = useCallback(() => {

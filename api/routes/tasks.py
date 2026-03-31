@@ -46,12 +46,16 @@ _celery.conf.update(task_serializer="json", accept_content=["json"])
 
 def _task_to_response(task: Task) -> TaskResponse:
     """Convert a Task ORM object to a TaskResponse."""
+    # browser-use may store result as a plain string; normalize to dict
+    result = task.result
+    if isinstance(result, str):
+        result = {"text": result}
     return TaskResponse(
         task_id=task.id,
         url=task.url,
         status=task.status or "queued",
         success=task.success or False,
-        result=task.result,
+        result=result,
         error=task.error_message,
         replay_url=None,
         steps=task.total_steps or 0,

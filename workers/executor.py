@@ -410,20 +410,32 @@ class TaskExecutor:
     async def _execute_with_agent(self, browser: Any, config: TaskConfig) -> Any:
         prompt = self._build_task_prompt(config)
 
-        from langchain_anthropic import ChatAnthropic
+        from browser_use.llm.anthropic.chat import ChatAnthropic
 
         llm = ChatAnthropic(
-            model_name=self.model,
-            anthropic_api_key=worker_settings.ANTHROPIC_API_KEY,
+            model=self.model,
+            api_key=worker_settings.ANTHROPIC_API_KEY,
             timeout=60,
         )
 
         from browser_use import Agent
+        from browser_use.browser.session import BrowserSession
+
+        # browser-use 0.11+ requires a BrowserSession, not a raw Playwright Browser.
+        browser_session = BrowserSession(
+            headless=True,
+            enable_default_extensions=False,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+            ],
+        )
 
         agent = Agent(
             task=prompt,
             llm=llm,
-            browser=browser,
+            browser=browser_session,
             register_new_step_callback=self._on_agent_step,
             calculate_cost=True,
         )

@@ -2,6 +2,7 @@ celery
 redis
 playwright
 anthropic
+langchain-anthropic
 browser-use
 structlog
 cryptography

@@ -39,6 +39,12 @@ const config: Config = {
         destructive: {
           DEFAULT: "var(--destructive)",
         },
+        brand: {
+          DEFAULT: "var(--brand)",
+          foreground: "var(--brand-foreground)",
+        },
+        success: "var(--success)",
+        warning: "var(--warning)",
         border: "var(--border)",
         input: "var(--input)",
         ring: "var(--ring)",

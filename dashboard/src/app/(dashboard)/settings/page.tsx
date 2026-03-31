@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Copy, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApiClient } from "@/hooks/use-api-client";
-import { ApiError } from "@/lib/api-client";
 import type { BillingUsageResponse, ApiKeyResponse } from "@/lib/types";
 
 const TIERS = ["free", "startup", "growth", "enterprise"] as const;
@@ -29,7 +28,6 @@ const TIER_LABELS: Record<string, string> = {
 
 export default function SettingsPage() {
   const client = useApiClient();
-  const router = useRouter();
 
   // Billing state
   const [billing, setBilling] = useState<BillingUsageResponse | null>(null);
@@ -52,17 +50,13 @@ export default function SettingsPage() {
       setBilling(res);
       setBillingError(null);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        router.replace("/login");
-        return;
-      }
       setBillingError(
         err instanceof Error ? err.message : "Failed to fetch billing"
       );
     } finally {
       setBillingLoading(false);
     }
-  }, [client, router]);
+  }, [client]);
 
   const fetchApiKeys = useCallback(async () => {
     if (!client) return;
@@ -71,17 +65,13 @@ export default function SettingsPage() {
       setApiKeys(res);
       setKeysError(null);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        router.replace("/login");
-        return;
-      }
       setKeysError(
         err instanceof Error ? err.message : "Failed to fetch API keys"
       );
     } finally {
       setKeysLoading(false);
     }
-  }, [client, router]);
+  }, [client]);
 
   useEffect(() => {
     fetchBilling();
@@ -124,8 +114,9 @@ export default function SettingsPage() {
       setCreatedKey(res.key);
       setNewKeyLabel("");
       await fetchApiKeys();
+      toast.success("API key created");
     } catch (err) {
-      setKeysError(
+      toast.error(
         err instanceof Error ? err.message : "Failed to create API key"
       );
     } finally {
@@ -138,8 +129,9 @@ export default function SettingsPage() {
     try {
       await client.revokeApiKey(keyId);
       await fetchApiKeys();
+      toast.success("API key revoked");
     } catch (err) {
-      setKeysError(
+      toast.error(
         err instanceof Error ? err.message : "Failed to revoke API key"
       );
     }
@@ -147,6 +139,7 @@ export default function SettingsPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard");
   };
 
   const usagePercent =

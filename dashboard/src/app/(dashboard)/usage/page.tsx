@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { BarChart3, Info } from "lucide-react";
+import { BarChart3, Info, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,6 +9,7 @@ import {
   ProgressLabel,
   ProgressValue,
 } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UsageChart } from "@/components/usage-chart";
 import { CostChart } from "@/components/cost-chart";
@@ -18,7 +18,6 @@ import { ExecutorComparisonCards } from "@/components/executor-comparison";
 import { ExpensiveTasksTable } from "@/components/expensive-tasks-table";
 import { EmptyState } from "@/components/empty-state";
 import { useApiClient } from "@/hooks/use-api-client";
-import { ApiError } from "@/lib/api-client";
 import { formatCost, formatTokens } from "@/lib/utils";
 import type { UsageResponse, TaskResponse } from "@/lib/types";
 import {
@@ -31,11 +30,11 @@ import {
 
 export default function UsagePage() {
   const client = useApiClient();
-  const router = useRouter();
   const [usage, setUsage] = useState<UsageResponse | null>(null);
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -58,15 +57,11 @@ export default function UsagePage() {
       setHasMore(tasksRes.has_more);
       setError(null);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        router.replace("/login");
-        return;
-      }
       setError(err instanceof Error ? err.message : "Failed to fetch usage");
     } finally {
       setLoading(false);
     }
-  }, [client, router]);
+  }, [client]);
 
   useEffect(() => {
     fetchData();
@@ -124,7 +119,22 @@ export default function UsagePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Usage</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Usage</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={refreshing}
+          onClick={async () => {
+            setRefreshing(true);
+            await fetchData();
+            setRefreshing(false);
+          }}
+        >
+          <RefreshCw className={`mr-2 size-4 ${refreshing ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
+      </div>
 
       {hasMore && (
         <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
@@ -17,30 +17,18 @@ import { KeyRound } from "lucide-react";
 
 export default function LoginPage() {
   const [key, setKey] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { apiKey, login } = useAuth();
   const router = useRouter();
 
-  async function handleSubmit(e: React.FormEvent) {
+  // Navigate after apiKey state is committed
+  useEffect(() => {
+    if (apiKey) router.replace("/tasks");
+  }, [apiKey, router]);
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!key.trim()) return;
-
-    setError("");
-    setLoading(true);
-
-    try {
-      const valid = await login(key.trim());
-      if (valid) {
-        router.replace("/tasks");
-      } else {
-        setError("Invalid API key. Please check your key and try again.");
-      }
-    } catch {
-      setError("Failed to connect to the API. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    login(key.trim());
   }
 
   return (
@@ -50,7 +38,9 @@ export default function LoginPage() {
           <KeyRound className="size-5 text-primary" />
         </div>
         <CardTitle>ComputerUse.dev</CardTitle>
-        <CardDescription>Enter your API key to continue</CardDescription>
+        <CardDescription>
+          Enter your API key to access the dashboard
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -59,17 +49,14 @@ export default function LoginPage() {
             <Input
               id="api-key"
               type="password"
-              placeholder="sk-..."
+              placeholder="cu_test_..."
               value={key}
               onChange={(e) => setKey(e.target.value)}
               autoFocus
             />
           </div>
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
-          <Button className="w-full" disabled={loading || !key.trim()}>
-            {loading ? "Validating..." : "Sign in"}
+          <Button type="submit" className="w-full" disabled={!key.trim()}>
+            Continue
           </Button>
         </form>
       </CardContent>

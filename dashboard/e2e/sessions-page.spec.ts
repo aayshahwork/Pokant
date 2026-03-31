@@ -385,7 +385,7 @@ test.describe("Empty state", () => {
 
     await expect(page.getByText("No sessions")).toBeVisible();
     await expect(
-      page.getByText("Sessions are created automatically when tasks use authenticated browsing")
+      page.getByText("Sessions are created automatically when tasks interact with authenticated websites")
     ).toBeVisible();
   });
 

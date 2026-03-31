@@ -15,7 +15,7 @@ export default function DashboardLayout({
         <Sidebar className="hidden lg:flex" />
         <div className="flex flex-1 flex-col overflow-hidden">
           <MobileHeader />
-          <main className="flex-1 overflow-auto p-6">{children}</main>
+          <main className="flex-1 overflow-auto p-6 animate-in fade-in duration-200">{children}</main>
         </div>
       </div>
     </AuthGuard>

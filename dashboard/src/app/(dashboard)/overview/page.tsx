@@ -11,14 +11,21 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Loader2 } from "lucide-react";
+import {
+  Loader2,
+  Activity,
+  TrendingUp,
+  DollarSign,
+  Globe,
+  Plus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/status-badge";
 import { useApiClient } from "@/hooks/use-api-client";
-import { ApiError } from "@/lib/api-client";
+
 import {
   cn,
   formatCost,
@@ -63,15 +70,11 @@ export default function OverviewPage() {
       setSessions(sessionRes);
       setError(null);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        router.replace("/login");
-        return;
-      }
       setError(err instanceof Error ? err.message : "Failed to load overview");
     } finally {
       setLoading(false);
     }
-  }, [client, router]);
+  }, [client]);
 
   useEffect(() => {
     setLoading(true);
@@ -215,15 +218,24 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Overview</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Overview</h1>
+        <Button onClick={() => router.push("/tasks/new")}>
+          <Plus className="mr-2 size-4" />
+          New Task
+        </Button>
+      </div>
 
       {/* ── Metric cards ──────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Tasks Today
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Tasks Today
+              </CardTitle>
+              <Activity className="size-4 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
@@ -247,9 +259,12 @@ export default function OverviewPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Success Rate (24h)
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Success Rate (24h)
+              </CardTitle>
+              <TrendingUp className="size-4 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent>
             {metrics.successRate !== null ? (
@@ -275,9 +290,12 @@ export default function OverviewPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Cost Today
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Cost Today
+              </CardTitle>
+              <DollarSign className="size-4 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent>
             <span className="text-2xl font-bold">
@@ -288,9 +306,12 @@ export default function OverviewPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active Sessions
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Active Sessions
+              </CardTitle>
+              <Globe className="size-4 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent>
             <span className="text-2xl font-bold">
@@ -311,8 +332,15 @@ export default function OverviewPage() {
           {metrics.chartData.every(
             (d) => d.completed === 0 && d.failed === 0
           ) ? (
-            <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
-              No task activity in the last 7 days
+            <div className="flex h-48 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+              <p>No task activity in the last 7 days</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/tasks/new")}
+              >
+                Create your first task
+              </Button>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={240}>

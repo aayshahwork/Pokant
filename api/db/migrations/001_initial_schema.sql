@@ -4,6 +4,9 @@
 
 BEGIN;
 
+-- Required for gen_random_bytes() used in uuid_generate_v7()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- ============================================================================
 -- a) uuid_generate_v7() — RFC 9562 UUIDv7 with temporal ordering
 -- ============================================================================
@@ -19,8 +22,8 @@ DECLARE
 BEGIN
     ts_ms := (extract(epoch FROM clock_timestamp()) * 1000)::bigint;
 
-    -- Start with 16 random bytes
-    uuid_bytes := gen_random_bytes(16);
+    -- Start with 16 random bytes (fully-qualified for SET search_path = '')
+    uuid_bytes := public.gen_random_bytes(16);
 
     -- Overwrite first 6 bytes with 48-bit timestamp (big-endian)
     -- Mask to 0-255 BEFORE casting to int to avoid overflow
@@ -221,8 +224,16 @@ CREATE POLICY audit_log_tenant ON audit_log
 
 -- Revoke UPDATE/DELETE on audit_log from all non-superuser roles
 REVOKE UPDATE, DELETE ON audit_log FROM PUBLIC;
-REVOKE UPDATE, DELETE ON audit_log FROM anon;
-REVOKE UPDATE, DELETE ON audit_log FROM authenticated;
+
+-- Supabase-specific roles (skip if not present, e.g. in plain Docker Postgres)
+DO $$ BEGIN
+    EXECUTE 'REVOKE UPDATE, DELETE ON audit_log FROM anon';
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
+DO $$ BEGIN
+    EXECUTE 'REVOKE UPDATE, DELETE ON audit_log FROM authenticated';
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
 
 
 COMMIT;

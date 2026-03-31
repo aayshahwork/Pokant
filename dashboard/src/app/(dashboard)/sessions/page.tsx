@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { differenceInDays, formatDistanceToNow } from "date-fns";
-import { Key } from "lucide-react";
+import { Key, RefreshCw } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -13,11 +13,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { SessionDrawer, AUTH_STATE_CONFIG } from "@/components/session-drawer";
 import { useApiClient } from "@/hooks/use-api-client";
-import { ApiError } from "@/lib/api-client";
 import type { SessionResponse } from "@/lib/types";
 
 function AuthStateBadge({ state }: { state: string | null }) {
@@ -81,15 +81,11 @@ export default function SessionsPage() {
       setSessions(res);
       setError(null);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        router.replace("/login");
-        return;
-      }
       setError(err instanceof Error ? err.message : "Failed to fetch sessions");
     } finally {
       setLoading(false);
     }
-  }, [client, router]);
+  }, [client]);
 
   useEffect(() => {
     fetchSessions();
@@ -102,7 +98,18 @@ export default function SessionsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Sessions</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Sessions</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => { setLoading(true); fetchSessions(); }}
+          disabled={loading}
+        >
+          <RefreshCw className={`mr-2 size-4 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
+      </div>
 
       {loading ? (
         <div className="space-y-3">
@@ -118,7 +125,9 @@ export default function SessionsPage() {
         <EmptyState
           icon={Key}
           title="No sessions"
-          description="Session management coming soon. Sessions are created automatically when tasks use authenticated browsing."
+          description="Sessions are created automatically when tasks interact with authenticated websites. Create a task that requires login to see sessions here."
+          actionLabel="Create Task"
+          onAction={() => router.push("/tasks/new")}
         />
       ) : (
         <>
