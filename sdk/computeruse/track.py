@@ -42,6 +42,9 @@ class TrackConfig:
     api_url: Optional[str] = None
     api_key: Optional[str] = None
 
+    # Alerts (optional)
+    alerts: Optional[Any] = None  # AlertConfig
+
 
 class TrackedPage:
     """Wraps a Playwright Page with automatic step tracking.
@@ -56,9 +59,15 @@ class TrackedPage:
         self._config = config
         self._steps: List[StepData] = []
         self._step_counter: int = 0
-        self._run_id: str = config.task_id or uuid.uuid4().hex[:12]
+        self._run_id: str = config.task_id or str(uuid.uuid4())
         self._start_time: float = 0.0
         self._start_dt: Optional[datetime] = None
+
+        self._alert_emitter: Optional[Any] = None
+        if config.alerts is not None:
+            from computeruse.alerts import AlertEmitter
+
+            self._alert_emitter = AlertEmitter(config.alerts)
 
     def _start(self) -> None:
         self._start_time = time.monotonic()
@@ -101,6 +110,10 @@ class TrackedPage:
                     ActionType.NAVIGATE, f"goto({url})", duration, False,
                     screenshot, str(exc),
                 )
+                if self._alert_emitter:
+                    self._alert_emitter.emit_failure(
+                        self._run_id, str(exc), classified.category,
+                    )
                 raise
 
     async def click(self, selector: str, **kwargs: Any) -> Any:
@@ -201,6 +214,11 @@ class TrackedPage:
             self._record_step(
                 action_type, description, duration, False, screenshot, str(exc),
             )
+            if self._alert_emitter:
+                classified = classify_error(exc)
+                self._alert_emitter.emit_failure(
+                    self._run_id, str(exc), classified.category,
+                )
             raise
 
     def _record_step(
@@ -258,7 +276,11 @@ class TrackedPage:
         for step in self._steps:
             if step.screenshot_bytes:
                 path = screenshots_dir / f"step_{step.step_number:03d}.jpg"
-                path.write_bytes(step.screenshot_bytes)
+                screenshot_data = step.screenshot_bytes
+                if isinstance(screenshot_data, str):
+                    import base64
+                    screenshot_data = base64.b64decode(screenshot_data)
+                path.write_bytes(screenshot_data)
 
     def _save_run_metadata(self) -> None:
         """Save run metadata JSON."""

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ListTodo, Key, BarChart3, Settings, LogOut, Sun, Moon, Monitor } from "lucide-react";
+import { LayoutDashboard, HeartPulse, ListTodo, Key, BarChart3, Settings, LogOut, Sun, Moon, Monitor } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/auth-context";
 import { useTheme } from "@/contexts/theme-context";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
+  { href: "/health", label: "Health", icon: HeartPulse },
   { href: "/tasks", label: "Tasks", icon: ListTodo },
   { href: "/sessions", label: "Sessions", icon: Key },
   { href: "/usage", label: "Usage", icon: BarChart3 },

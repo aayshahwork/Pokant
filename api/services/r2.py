@@ -119,9 +119,17 @@ def _local_file_url(local_key: str) -> str:
 
 
 def is_r2_configured() -> bool:
-    """Return True if R2 credentials are present and non-placeholder."""
+    """Return True if R2 credentials and endpoint are present and non-placeholder."""
     from api.config import settings
 
     key = settings.R2_ACCESS_KEY
     secret = settings.R2_SECRET_KEY
-    return bool(key and secret and key != "your_r2_access_key" and secret != "your_r2_secret_key")
+    endpoint = settings.R2_ENDPOINT
+    if not (key and secret and endpoint):
+        return False
+    placeholders = {"your_r2_access_key", "your_r2_secret_key", "your_r2_endpoint", "xxx"}
+    if key in placeholders or secret in placeholders:
+        return False
+    if "xxx" in endpoint or "your_" in endpoint:
+        return False
+    return True

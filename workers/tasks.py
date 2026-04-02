@@ -514,6 +514,14 @@ def _upload_step_screenshots(task_id: str, step_data: list) -> Dict[int, str]:
                     exc,
                 )
 
+    # Fall back to local storage if ALL R2 uploads failed
+    if not results and steps_with_screenshots:
+        logger.warning(
+            "All R2 uploads failed for task %s, falling back to local storage",
+            task_id,
+        )
+        return _save_step_screenshots_local(task_id, steps_with_screenshots)
+
     logger.info(
         "Uploaded %d/%d step screenshots for task %s",
         len(results),
@@ -553,28 +561,35 @@ def _upload_replay(task_id: str, result: Any) -> str | None:
 
     import boto3
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        replay_path = f"{tmpdir}/{task_id}.html"
-        replay_gen.generate(replay_path)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            replay_path = f"{tmpdir}/{task_id}.html"
+            replay_gen.generate(replay_path)
 
-        s3_key = f"replays/{task_id}/replay.html"
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=worker_settings.R2_ENDPOINT or None,
-            aws_access_key_id=worker_settings.R2_ACCESS_KEY,
-            aws_secret_access_key=worker_settings.R2_SECRET_KEY,
-        )
-        s3.upload_file(
-            replay_path,
-            worker_settings.R2_BUCKET_NAME,
-            s3_key,
-            ExtraArgs={
-                "ContentType": "text/html",
-                "CacheControl": "public, max-age=86400",
-            },
-        )
+            s3_key = f"replays/{task_id}/replay.html"
+            s3 = boto3.client(
+                "s3",
+                endpoint_url=worker_settings.R2_ENDPOINT or None,
+                aws_access_key_id=worker_settings.R2_ACCESS_KEY,
+                aws_secret_access_key=worker_settings.R2_SECRET_KEY,
+            )
+            s3.upload_file(
+                replay_path,
+                worker_settings.R2_BUCKET_NAME,
+                s3_key,
+                ExtraArgs={
+                    "ContentType": "text/html",
+                    "CacheControl": "public, max-age=86400",
+                },
+            )
 
-    return s3_key
+        return s3_key
+    except Exception as exc:
+        logger.warning(
+            "R2 replay upload failed for task %s, falling back to local: %s",
+            task_id, exc,
+        )
+        return _save_replay_local(task_id, replay_gen)
 
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertBell } from "@/components/alert-bell";
 import { Sidebar } from "./sidebar";
 
 export function MobileHeader() {
@@ -22,11 +23,16 @@ export function MobileHeader() {
 
   return (
     <>
-      <header className="flex h-14 items-center border-b px-4 lg:hidden">
-        <Button variant="ghost" size="icon-sm" onClick={() => setOpen(true)}>
-          <Menu className="size-5" />
-        </Button>
-        <span className="ml-3 text-sm font-semibold">ComputerUse.dev</span>
+      <header className="flex h-14 items-center border-b px-4">
+        <div className="flex items-center lg:hidden">
+          <Button variant="ghost" size="icon-sm" onClick={() => setOpen(true)}>
+            <Menu className="size-5" />
+          </Button>
+          <span className="ml-3 text-sm font-semibold">ComputerUse.dev</span>
+        </div>
+        <div className="ml-auto">
+          <AlertBell />
+        </div>
       </header>
 
       {/* Backdrop */}

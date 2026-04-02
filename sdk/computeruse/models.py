@@ -22,6 +22,9 @@ class ActionType(StrEnum):
     INJECT_CREDENTIALS = "inject_credentials"
     SOLVE_CAPTCHA = "solve_captcha"
     UNKNOWN = "unknown"
+    # Stagehand AI actions
+    ACT = "act"
+    OBSERVE = "observe"
     # Native executor actions (computer_20251124)
     MOUSE_MOVE = "mouse_move"
     KEY_PRESS = "key_press"
@@ -32,6 +35,22 @@ class ActionType(StrEnum):
     DRAG = "drag"
     TRIPLE_CLICK = "triple_click"
     ZOOM = "zoom"
+    # Non-visual agent actions
+    LLM_CALL = "llm_call"
+    API_CALL = "api_call"
+    STATE_SNAPSHOT = "state_snapshot"
+    # Desktop automation actions
+    DESKTOP_CLICK = "desktop_click"
+    DESKTOP_TYPE = "desktop_type"
+    DESKTOP_HOTKEY = "desktop_hotkey"
+    DESKTOP_SCROLL = "desktop_scroll"
+    DESKTOP_DRAG = "desktop_drag"
+    DESKTOP_LAUNCH = "desktop_launch"
+    DESKTOP_FOCUS = "desktop_focus"
+    WINDOW_SWITCH = "window_switch"
+    MENU_SELECT = "menu_select"
+    FILE_OPEN = "file_open"
+    FILE_SAVE = "file_save"
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +356,10 @@ class StepData(BaseModel):
     reasoning: Optional[str] = Field(
         default=None,
         description="LLM reasoning text for this step",
+    )
+    context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Arbitrary debug context (LLM traces, API responses, state snapshots)",
     )
 
 

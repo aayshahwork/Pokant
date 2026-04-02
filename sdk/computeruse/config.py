@@ -107,6 +107,27 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------ #
+    # Optional — Observius API reporting                                   #
+    # ------------------------------------------------------------------ #
+
+    OBSERVIUS_API_URL: Optional[str] = Field(
+        default=None,
+        description=(
+            "Base URL of the Observius API for automatic run reporting. "
+            "When set alongside OBSERVIUS_API_KEY, local SDK runs are "
+            "automatically ingested into the dashboard. "
+            "Example: 'http://localhost:8000' or 'https://api.observius.dev'"
+        ),
+    )
+    OBSERVIUS_API_KEY: Optional[str] = Field(
+        default=None,
+        description=(
+            "API key for authenticating with the Observius ingest endpoint. "
+            "Required alongside OBSERVIUS_API_URL for automatic reporting."
+        ),
+    )
+
+    # ------------------------------------------------------------------ #
     # Optional — backend services (cloud API mode only)                   #
     # ------------------------------------------------------------------ #
 

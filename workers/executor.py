@@ -274,7 +274,7 @@ class TaskExecutor:
             # -- Step 3: Navigate (with retry) --
             step_start = time.monotonic()
             await self._navigate_with_retry(page, self.config.url)
-            screenshot_bytes = await page.screenshot(type="jpeg", quality=85)
+            screenshot_bytes = await page.screenshot(type="png")
             self.steps.append(
                 StepData(
                     step_number=1,
@@ -438,6 +438,7 @@ class TaskExecutor:
             browser=browser_session,
             register_new_step_callback=self._on_agent_step,
             calculate_cost=True,
+            use_vision=True,
         )
 
         try:
@@ -580,8 +581,13 @@ class TaskExecutor:
             screenshots = []
             try:
                 screenshots = result.screenshots() if hasattr(result, "screenshots") else []
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to retrieve screenshots from browser_use result: %s", e)
+
+            logger.info(
+                "Enriching steps: history=%d screenshots=%d existing_steps=%d",
+                len(history), len(screenshots), len(self.steps),
+            )
 
             action_names = []
             try:

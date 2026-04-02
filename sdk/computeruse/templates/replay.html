@@ -21,6 +21,15 @@
   .detail-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
   .detail-value { font-size: 0.875rem; color: #1f2937; }
   .details-row { border-top: 1px solid #e5e7eb; padding-top: 0.5rem; margin-top: 0.5rem; }
+  /* Analysis panel */
+  .analysis-panel { border-radius: 8px; padding: 12px 16px; border-left: 4px solid; }
+  .analysis-warn { background: #fef3c7; border-color: #f59e0b; }
+  .analysis-ok { background: #dcfce7; border-color: #16a34a; }
+  .badge-tier1 { background: #e5e7eb; color: #374151; }
+  .badge-tier2 { background: #dbeafe; color: #1e40af; }
+  .badge-tier3 { background: #f3e8ff; color: #6b21a8; }
+  .analysis-finding { padding: 6px 0; border-bottom: 1px solid #e5e7eb; }
+  .analysis-finding:last-child { border-bottom: none; }
 </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -34,6 +43,9 @@
     </div>
     <span class="text-sm text-gray-500" id="step-counter">Step 1 / 1</span>
   </div>
+
+  <!-- Analysis panel (shown only if analysis data exists) -->
+  <div id="analysis-panel" style="display:none"></div>
 
   <!-- Main -->
   <div class="flex gap-4 flex-1 overflow-hidden">
@@ -107,6 +119,51 @@ function renderStep() {
     '<div><div class="detail-label">Tokens Out</div><div class="detail-value">' + (s.tokens_out || 0) + '</div></div>' +
     '<div><div class="detail-label">Time</div><div class="detail-value font-mono text-xs">' + esc(s.timestamp || '') + '</div></div>' +
     '</div>';
+  if (s.context) {
+    h += '<div class="details-row">';
+    if (s.context.type === "desktop_action") {
+      h += '<div class="detail-label" style="margin-bottom:4px">Desktop Action</div>';
+      h += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px">';
+      if (s.context.window_title) {
+        h += '<div style="display:flex;gap:8px;align-items:baseline;margin-bottom:4px">';
+        h += '<span style="font-size:0.7rem;color:#6b7280">Window</span>';
+        h += '<span style="font-size:0.85rem;font-weight:600;color:#1f2937">' + esc(s.context.window_title) + '</span>';
+        h += '</div>';
+      }
+      if (s.context.coordinates) {
+        h += '<div style="display:flex;gap:8px;align-items:baseline">';
+        h += '<span style="font-size:0.7rem;color:#6b7280">Coordinates</span>';
+        h += '<span style="font-size:0.8rem;font-family:monospace;color:#1f2937">(' + s.context.coordinates.x + ', ' + s.context.coordinates.y + ')</span>';
+        h += '</div>';
+      }
+      h += '</div>';
+    } else if (s.context.prompt != null && s.context.response != null) {
+      h += '<div class="detail-label" style="margin-bottom:4px">LLM Trace</div>';
+      h += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px">';
+      h += '<div style="font-size:0.7rem;color:#6b7280;margin-bottom:2px">Prompt</div>';
+      h += '<pre style="white-space:pre-wrap;font-size:0.8rem;margin:0 0 8px">' + esc(s.context.prompt) + '</pre>';
+      h += '<div style="font-size:0.7rem;color:#6b7280;margin-bottom:2px">Response</div>';
+      h += '<pre style="white-space:pre-wrap;font-size:0.8rem;margin:0">' + esc(s.context.response) + '</pre>';
+      if (s.context.model) h += '<div style="font-size:0.7rem;color:#9ca3af;margin-top:4px">Model: ' + esc(s.context.model) + '</div>';
+      h += '</div>';
+    } else if (s.context.type === "api_call") {
+      h += '<div class="detail-label" style="margin-bottom:4px">API Call</div>';
+      h += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px">';
+      h += '<div style="display:flex;gap:8px;align-items:baseline;margin-bottom:4px">';
+      h += '<span style="font-size:0.85rem;font-weight:600;font-family:monospace;color:#1f2937">' + esc(s.context.method || '') + '</span>';
+      h += '<span style="font-size:0.8rem;color:#3730a3">' + esc(s.context.url || '') + '</span>';
+      if (s.context.status_code != null) {
+        h += '<span class="badge ' + (s.context.status_code < 400 ? 'badge-ok' : 'badge-err') + '">' + s.context.status_code + '</span>';
+      }
+      h += '</div>';
+      h += '</div>';
+    } else {
+      h += '<details><summary class="detail-label" style="cursor:pointer">Debug Context</summary>';
+      h += '<pre style="white-space:pre-wrap;font-size:0.8rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-top:4px">' + esc(JSON.stringify(s.context, null, 2)) + '</pre>';
+      h += '</details>';
+    }
+    h += '</div>';
+  }
   document.getElementById('details').innerHTML = h;
 
   document.getElementById('btn-prev').disabled = cur === 0;
@@ -126,6 +183,45 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); next(); }
 });
 
+function renderAnalysis() {
+  var a = replayData.analysis;
+  if (!a || !a.findings || !a.findings.length) return;
+  var panel = document.getElementById('analysis-panel');
+  var isSuccess = replayData.success;
+  var cls = isSuccess ? 'analysis-ok' : 'analysis-warn';
+  var tierLabel = {1: 'Rule', 2: 'History', 3: 'AI'};
+  var tierCls = {1: 'badge-tier1', 2: 'badge-tier2', 3: 'badge-tier3'};
+  var h = '<div class="analysis-panel ' + cls + '">';
+  h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+  h += '<span style="font-size:1.1rem;font-weight:700;color:#1f2937">Run Analysis</span>';
+  a.tiers_executed.forEach(function(t) {
+    h += '<span class="badge ' + (tierCls[t]||'badge-tier1') + '">' + (tierLabel[t]||'Tier '+t) + '</span>';
+  });
+  h += '</div>';
+  h += '<div style="font-size:0.95rem;font-weight:600;color:#1f2937;margin-bottom:4px">' + esc(a.summary) + '</div>';
+  h += '<div style="font-size:0.875rem;color:#374151;margin-bottom:6px">' + esc(a.primary_suggestion) + '</div>';
+  if (a.wasted_steps > 0) {
+    h += '<div style="font-size:0.8rem;color:#dc2626;margin-bottom:6px">';
+    h += a.wasted_steps + ' steps and $' + (a.wasted_cost_cents / 100).toFixed(4) + ' wasted after the agent got stuck';
+    h += '</div>';
+  }
+  h += '<details style="margin-top:4px"><summary style="cursor:pointer;font-size:0.8rem;color:#6b7280">All findings (' + a.findings.length + ')</summary>';
+  h += '<div style="margin-top:4px">';
+  a.findings.forEach(function(f) {
+    h += '<div class="analysis-finding">';
+    h += '<span class="badge ' + (tierCls[f.tier]||'badge-tier1') + '" style="margin-right:4px">' + (tierLabel[f.tier]||'Tier '+f.tier) + '</span>';
+    h += '<span style="font-size:0.8rem;font-weight:600">' + esc(f.category) + '</span>';
+    h += '<span style="font-size:0.75rem;color:#6b7280;margin-left:6px">' + Math.round(f.confidence*100) + '%</span>';
+    h += '<div style="font-size:0.8rem;color:#374151;margin-top:2px">' + esc(f.summary) + '</div>';
+    h += '<div style="font-size:0.8rem;color:#4b5563;margin-top:1px">' + esc(f.suggestion) + '</div>';
+    h += '</div>';
+  });
+  h += '</div></details></div>';
+  panel.innerHTML = h;
+  panel.style.display = 'block';
+}
+
+renderAnalysis();
 renderTimeline();
 renderStep();
 </script>

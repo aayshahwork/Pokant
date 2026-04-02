@@ -23,6 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dashboard = ["fastapi>=0.100", "uvicorn>=0.24"]
+stagehand = ["stagehand>=3.0.0"]
 
 [project.urls]
 Homepage = "https://computeruse.dev"

@@ -198,7 +198,10 @@ class StuckDetector:
                 consecutive = 0
                 prev_hash = None
                 continue
-            h = hashlib.md5(step.screenshot_bytes).hexdigest()
+            ss_data = step.screenshot_bytes
+            if isinstance(ss_data, str):
+                ss_data = ss_data.encode("utf-8")
+            h = hashlib.md5(ss_data).hexdigest()
             if h == prev_hash:
                 consecutive += 1
             else:

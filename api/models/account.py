@@ -36,6 +36,7 @@ class Account(Base):
     tasks: Mapped[list[Task]] = relationship(back_populates="account")
     sessions: Mapped[list[Session]] = relationship(back_populates="account")
     audit_logs: Mapped[list[AuditLog]] = relationship(back_populates="account")
+    alerts: Mapped[list[Alert]] = relationship(back_populates="account")
 
 
 # Resolve forward refs after all models are imported
@@ -43,3 +44,4 @@ from .api_key import ApiKey  # noqa: E402
 from .task import Task  # noqa: E402
 from .session import Session  # noqa: E402
 from .audit_log import AuditLog  # noqa: E402
+from .alert import Alert  # noqa: E402

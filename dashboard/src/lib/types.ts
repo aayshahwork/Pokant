@@ -16,11 +16,29 @@ export type ErrorCategory =
   | "permanent_task"
   | "unknown";
 
-export type ExecutorMode = "browser_use" | "native";
+export type ExecutorMode = "browser_use" | "native" | "sdk";
+
+export interface AnalysisFinding {
+  tier: number;
+  category: string;
+  summary: string;
+  suggestion: string;
+  confidence: number;
+}
+
+export interface RunAnalysis {
+  summary: string;
+  primary_suggestion: string;
+  findings: AnalysisFinding[];
+  wasted_steps: number;
+  wasted_cost_cents: number;
+  tiers_executed: number[];
+}
 
 export interface TaskResponse {
   task_id: string;
   url: string | null;
+  task_description: string | null;
   status: TaskStatus;
   success: boolean;
   result: Record<string, unknown> | null;
@@ -37,6 +55,7 @@ export interface TaskResponse {
   total_tokens_in: number;
   total_tokens_out: number;
   executor_mode: ExecutorMode;
+  analysis?: RunAnalysis | null;
 }
 
 export interface TaskListResponse {
@@ -56,6 +75,7 @@ export interface StepResponse {
   success: boolean;
   error: string | null;
   created_at: string | null;
+  context?: Record<string, unknown> | null;
 }
 
 export interface TaskCreateRequest {
@@ -134,4 +154,88 @@ export interface ApiKeyCreateResponse {
   key_suffix: string;
   label: string | null;
   created_at: string;
+}
+
+// Alerts
+
+export interface AlertResponse {
+  id: string;
+  alert_type: string;
+  message: string;
+  task_id: string | null;
+  acknowledged: boolean;
+  created_at: string;
+}
+
+export interface AlertListResponse {
+  alerts: AlertResponse[];
+  total: number;
+  has_more: boolean;
+}
+
+// Health Analytics
+
+export type AnalyticsPeriod = "1h" | "6h" | "24h" | "7d" | "30d";
+
+export interface ErrorCategoryCount {
+  category: string;
+  count: number;
+}
+
+export interface FailingUrl {
+  url: string;
+  failure_count: number;
+  last_failure: string;
+}
+
+export interface HourlyBucket {
+  hour: string;
+  completed: number;
+  failed: number;
+  cost_cents: number;
+}
+
+export interface ExecutorStatsResponse {
+  count: number;
+  success_rate: number;
+  avg_cost: number;
+}
+
+export interface ExecutorBreakdown {
+  browser_use: ExecutorStatsResponse;
+  native: ExecutorStatsResponse;
+  sdk: ExecutorStatsResponse;
+}
+
+export interface RetryStatsResponse {
+  total_retried: number;
+  retry_success_rate: number;
+  avg_attempts: number;
+}
+
+export interface AlertSummary {
+  id: string;
+  alert_type: string;
+  message: string;
+  created_at: string;
+}
+
+export interface HealthAnalyticsResponse {
+  period: AnalyticsPeriod;
+  total_runs: number;
+  completed: number;
+  failed: number;
+  timeout: number;
+  success_rate: number;
+  success_rate_trend: number;
+  total_cost_cents: number;
+  avg_cost_per_run: number;
+  total_tokens: number;
+  avg_duration_ms: number;
+  top_errors: ErrorCategoryCount[];
+  top_failing_urls: FailingUrl[];
+  hourly_breakdown: HourlyBucket[];
+  executor_breakdown: ExecutorBreakdown;
+  retry_stats: RetryStatsResponse;
+  alerts: AlertSummary[];
 }

@@ -39,7 +39,12 @@ from computeruse.replay_generator import ReplayGenerator
 from computeruse.retry_policy import MAX_DELAY_SECONDS, RETRIABLE_CATEGORIES, RetryDecision, should_retry_task
 from computeruse.stuck_detector import StuckDetector, StuckSignal
 from computeruse.track import TrackConfig, TrackedPage, track
+from computeruse.tracker import ObserviusTracker, TrackerConfig, create_tracker
 from computeruse.wrap import WrappedAgent, WrapConfig, wrap
+from computeruse.stagehand import StagehandConfig, TrackedStagehand, observe_stagehand
+from computeruse.alerts import AlertConfig, AlertEmitter
+from computeruse.analyzer import AnalysisConfig, AnalysisFinding, HistoryAnalyzer, LLMAnalyzer, RuleAnalyzer, RunAnalysis, RunAnalyzer
+from computeruse.desktop import mss_screenshot_fn, pillow_screenshot_fn, pyautogui_screenshot_fn
 
 __version__ = "0.1.0"
 
@@ -87,10 +92,33 @@ __all__ = [
     "track",
     "TrackedPage",
     "TrackConfig",
+    # Generic tracker
+    "ObserviusTracker",
+    "TrackerConfig",
+    "create_tracker",
     # Wrapper
     "wrap",
     "WrappedAgent",
     "WrapConfig",
+    # Stagehand
+    "observe_stagehand",
+    "TrackedStagehand",
+    "StagehandConfig",
+    # Alerts
+    "AlertConfig",
+    "AlertEmitter",
+    # Analysis
+    "AnalysisFinding",
+    "RunAnalysis",
+    "AnalysisConfig",
+    "RuleAnalyzer",
+    "HistoryAnalyzer",
+    "LLMAnalyzer",
+    "RunAnalyzer",
+    # Desktop helpers
+    "pyautogui_screenshot_fn",
+    "pillow_screenshot_fn",
+    "mss_screenshot_fn",
     # Metadata
     "__version__",
 ]

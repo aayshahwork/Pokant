@@ -70,6 +70,20 @@ Observius collapses all of that into a single `run_task()` call. You describe wh
 
 ---
 
+## Works With
+
+| Language | Integration | Example |
+|----------|-------------|---------|
+| **Python** | Native SDK (`ObserviusTracker`, `wrap()`, `track()`, `observe_stagehand()`) | [`sdk/README.md`](sdk/README.md) |
+| **TypeScript / JavaScript** | Zero-dependency reporter class | [`sdk/examples/typescript/`](sdk/examples/typescript/) |
+| **Go** | Standard library HTTP example | [`sdk/examples/go/reporter.go`](sdk/examples/go/reporter.go) |
+| **Rust, Ruby, Java, etc.** | REST API — POST JSON to `/api/v1/tasks/ingest` | [`sdk/docs/universal-integration.md`](sdk/docs/universal-integration.md) |
+| **curl / shell** | Executable bash script | [`sdk/examples/curl/`](sdk/examples/curl/) |
+
+Any language that can make HTTP requests can report agent results to Observius. See the [Universal Integration Guide](sdk/docs/universal-integration.md) for the complete API reference.
+
+---
+
 ## Examples
 
 | Example | Description |
@@ -77,6 +91,7 @@ Observius collapses all of that into a single `run_task()` call. You describe wh
 | [`examples/extract_pricing.py`](examples/extract_pricing.py) | Scrape pricing tiers from any SaaS landing page and return structured JSON |
 | [`examples/monitor_competitors.py`](examples/monitor_competitors.py) | Check a competitor's site for changes and extract key data points |
 | [`examples/fill_form.py`](examples/fill_form.py) | Fill and submit a multi-step web form using provided credentials |
+| [`examples/stagehand_example.py`](examples/stagehand_example.py) | Track a Stagehand session with Observius (screenshots, replay, timing) |
 
 Run any example directly after setting `ANTHROPIC_API_KEY`:
 

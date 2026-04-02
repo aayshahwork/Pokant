@@ -16,6 +16,12 @@ import {
   Play,
   Pause,
   ImageOff,
+  AppWindow,
+  Monitor,
+  Layers,
+  Menu,
+  FileInput,
+  Save,
   type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +35,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatTokens, formatDuration } from "@/lib/utils";
-import type { StepResponse } from "@/lib/types";
+import type { StepResponse, ExecutorMode } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Action type config
@@ -53,6 +59,18 @@ const ACTION_CONFIG: Record<string, { icon: LucideIcon; label: string }> = {
   solve_captcha: { icon: HelpCircle, label: "Solve Captcha" },
   drag: { icon: Mouse, label: "Drag" },
   zoom: { icon: ArrowDownUp, label: "Zoom" },
+  // Desktop automation
+  desktop_click: { icon: Mouse, label: "Desktop Click" },
+  desktop_type: { icon: Keyboard, label: "Desktop Type" },
+  desktop_hotkey: { icon: Keyboard, label: "Desktop Hotkey" },
+  desktop_scroll: { icon: ArrowDownUp, label: "Desktop Scroll" },
+  desktop_drag: { icon: Mouse, label: "Desktop Drag" },
+  desktop_launch: { icon: AppWindow, label: "Launch App" },
+  desktop_focus: { icon: Monitor, label: "Focus Window" },
+  window_switch: { icon: Layers, label: "Switch Window" },
+  menu_select: { icon: Menu, label: "Menu Select" },
+  file_open: { icon: FileInput, label: "File Open" },
+  file_save: { icon: Save, label: "File Save" },
 };
 
 function getActionConfig(actionType: string) {
@@ -64,17 +82,139 @@ function estimateCostCents(tokensIn: number, tokensOut: number): number {
   return (tokensIn * 3 + tokensOut * 15) / 10_000;
 }
 
+const NON_VISUAL_ACTIONS = new Set(["llm_call", "api_call", "state_snapshot"]);
+const DESKTOP_ACTIONS = new Set([
+  "desktop_click", "desktop_type", "desktop_hotkey", "desktop_scroll",
+  "desktop_drag", "desktop_launch", "desktop_focus", "window_switch",
+  "menu_select", "file_open", "file_save",
+]);
+
+function getNoScreenshotMessage(
+  executorMode: ExecutorMode | undefined,
+  actionType: string,
+): string {
+  if (executorMode === "sdk") {
+    if (NON_VISUAL_ACTIONS.has(actionType.toLowerCase())) {
+      return "No visual \u2014 this is a non-browser step. Check Debug Context below for details.";
+    }
+    if (DESKTOP_ACTIONS.has(actionType.toLowerCase())) {
+      return "No screenshot \u2014 pass screenshot_fn= to ObserviusTracker for auto-screenshots.";
+    }
+    return "No screenshot \u2014 agent ran without a browser page. Pass page= to ObserviusTracker for auto-screenshots.";
+  }
+
+  if (executorMode === "browser_use" || executorMode === "native") {
+    return "Screenshot capture failed for this step.";
+  }
+
+  return "No screenshot captured";
+}
+
+// ---------------------------------------------------------------------------
+// Step context renderer
+// ---------------------------------------------------------------------------
+
+function StepContext({ context }: { context: Record<string, unknown> }) {
+  const type = context.type as string | undefined;
+
+  if (type === "desktop_action") {
+    const windowTitle = context.window_title as string | undefined;
+    const coords = context.coordinates as { x: number; y: number } | undefined;
+    if (!windowTitle && !coords) return null;
+    return (
+      <div>
+        <p className="text-xs font-medium text-muted-foreground mb-1">Desktop Action</p>
+        <div className="rounded-md border bg-muted/50 px-3 py-2 space-y-1">
+          {windowTitle && (
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs text-muted-foreground">Window</span>
+              <span className="text-sm font-medium">{windowTitle}</span>
+            </div>
+          )}
+          {coords && (
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs text-muted-foreground">Coordinates</span>
+              <span className="text-sm font-mono">({coords.x}, {coords.y})</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "llm_call") {
+    const prompt = context.prompt as string | undefined;
+    const response = context.response as string | undefined;
+    const model = context.model as string | undefined;
+    if (!prompt && !response) return null;
+    return (
+      <div>
+        <p className="text-xs font-medium text-muted-foreground mb-1">LLM Trace</p>
+        <div className="rounded-md border bg-muted/50 px-3 py-2 space-y-2 text-sm">
+          {prompt && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Prompt</p>
+              <pre className="whitespace-pre-wrap text-xs">{prompt.slice(0, 2000)}</pre>
+            </div>
+          )}
+          {response && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Response</p>
+              <pre className="whitespace-pre-wrap text-xs">{response.slice(0, 2000)}</pre>
+            </div>
+          )}
+          {model && <p className="text-xs text-muted-foreground">Model: {model}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "api_call") {
+    const method = context.method as string | undefined;
+    const url = context.url as string | undefined;
+    const statusCode = context.status_code as number | undefined;
+    if (!method && !url) return null;
+    return (
+      <div>
+        <p className="text-xs font-medium text-muted-foreground mb-1">API Call</p>
+        <div className="rounded-md border bg-muted/50 px-3 py-2 flex items-baseline gap-2">
+          {method && <span className="text-sm font-mono font-semibold">{method}</span>}
+          {url && <span className="text-sm text-primary truncate">{url}</span>}
+          {statusCode != null && (
+            <Badge variant={statusCode < 400 ? "secondary" : "destructive"} className="text-xs ml-auto shrink-0">
+              {statusCode}
+            </Badge>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Generic fallback — collapsible JSON
+  return (
+    <details>
+      <summary className="text-xs font-medium text-muted-foreground cursor-pointer">
+        Debug Context
+      </summary>
+      <pre className="mt-1 rounded-md border bg-muted/50 px-3 py-2 text-xs whitespace-pre-wrap overflow-x-auto">
+        {JSON.stringify(context, null, 2)}
+      </pre>
+    </details>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 interface StepTimelineProps {
   steps: StepResponse[];
+  executorMode?: ExecutorMode;
 }
 
 const SPEEDS = [1, 2, 4] as const;
 
-export function StepTimeline({ steps }: StepTimelineProps) {
+export function StepTimeline({ steps, executorMode }: StepTimelineProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
@@ -182,10 +322,10 @@ export function StepTimeline({ steps }: StepTimelineProps) {
                   />
                 ) : (
                   <div className="flex aspect-video items-center justify-center">
-                    <div className="text-center">
+                    <div className="text-center max-w-xs">
                       <ImageOff className="mx-auto size-8 text-muted-foreground" />
                       <p className="mt-2 text-sm text-muted-foreground">
-                        No screenshot captured
+                        {getNoScreenshotMessage(executorMode, step.action_type)}
                       </p>
                     </div>
                   </div>
@@ -309,6 +449,9 @@ export function StepTimeline({ steps }: StepTimelineProps) {
                   )}
                 </div>
               )}
+
+              {/* Step context */}
+              {step.context && <StepContext context={step.context} />}
             </div>
           </div>
 

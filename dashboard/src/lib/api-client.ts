@@ -13,6 +13,9 @@ import type {
   PortalResponse,
   ApiKeyResponse,
   ApiKeyCreateResponse,
+  AlertListResponse,
+  AnalyticsPeriod,
+  HealthAnalyticsResponse,
 } from "./types";
 
 export class ApiError extends Error {
@@ -212,6 +215,40 @@ export class ApiClient {
       method: "DELETE",
       headers: this.headers,
     });
+  }
+
+  // Alerts
+  async listAlerts(params?: {
+    limit?: number;
+    offset?: number;
+    acknowledged?: boolean;
+  }): Promise<AlertListResponse> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    if (params?.acknowledged !== undefined) qs.set("acknowledged", String(params.acknowledged));
+    const query = qs.toString();
+    return apiCall<AlertListResponse>(
+      `/api/v1/alerts${query ? `?${query}` : ""}`,
+      { headers: this.headers },
+    );
+  }
+
+  async acknowledgeAlert(alertId: string): Promise<{ id: string; acknowledged: boolean }> {
+    return apiCall(`/api/v1/alerts/${alertId}/ack`, {
+      method: "POST",
+      headers: this.headers,
+    });
+  }
+
+  // Analytics
+  async getHealthAnalytics(period: AnalyticsPeriod = "24h"): Promise<HealthAnalyticsResponse> {
+    const qs = new URLSearchParams();
+    qs.set("period", period);
+    return apiCall<HealthAnalyticsResponse>(
+      `/api/v1/analytics/health?${qs.toString()}`,
+      { headers: this.headers },
+    );
   }
 
   // Validate API key by attempting to list tasks

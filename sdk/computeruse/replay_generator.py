@@ -23,9 +23,15 @@ _TEMPLATES_DIR = Path(__file__).parent / "templates"
 class ReplayGenerator:
     """Generates a self-contained HTML replay from step data."""
 
-    def __init__(self, steps: List[StepData], task_metadata: Dict[str, Any]) -> None:
+    def __init__(
+        self,
+        steps: List[StepData],
+        task_metadata: Dict[str, Any],
+        analysis: Any = None,
+    ) -> None:
         self.steps = steps
         self.task_metadata = task_metadata
+        self.analysis = analysis
 
     def generate(self, output_path: str) -> str:
         """Generate the replay HTML file and return the output path."""
@@ -36,7 +42,7 @@ class ReplayGenerator:
 
         html = html_template.replace("/* __TAILWIND_CSS__ */", tailwind_css)
 
-        replay_data_js = json.dumps(replay_json, separators=(",", ":"))
+        replay_data_js = json.dumps(replay_json, separators=(",", ":"), default=str)
         html = html.replace(
             'var replayData = "__REPLAY_DATA__";',
             f"var replayData = {replay_data_js};",
@@ -59,13 +65,38 @@ class ReplayGenerator:
             "duration_ms": self.task_metadata.get("duration_ms", 0),
             "success": self.task_metadata.get("success", False),
             "steps": [self._serialize_step(s) for s in self.steps],
+            "analysis": self._serialize_analysis() if self.analysis else None,
+        }
+
+    def _serialize_analysis(self) -> Dict[str, Any]:
+        """Serialize analysis data for the replay JSON."""
+        a = self.analysis
+        return {
+            "summary": a.summary,
+            "primary_suggestion": a.primary_suggestion,
+            "wasted_steps": a.wasted_steps,
+            "wasted_cost_cents": a.wasted_cost_cents,
+            "tiers_executed": a.tiers_executed,
+            "findings": [
+                {
+                    "tier": f.tier,
+                    "category": f.category,
+                    "summary": f.summary,
+                    "suggestion": f.suggestion,
+                    "confidence": f.confidence,
+                }
+                for f in a.findings
+            ],
         }
 
     def _serialize_step(self, step: StepData) -> Dict[str, Any]:
         """Serialize a StepData to the replay JSON format."""
         screenshot_b64: str | None = None
         if step.screenshot_bytes:
-            screenshot_b64 = base64.standard_b64encode(step.screenshot_bytes).decode("ascii")
+            if isinstance(step.screenshot_bytes, str):
+                screenshot_b64 = step.screenshot_bytes
+            else:
+                screenshot_b64 = base64.standard_b64encode(step.screenshot_bytes).decode("ascii")
 
         return {
             "step_number": step.step_number,
@@ -78,4 +109,5 @@ class ReplayGenerator:
             "duration_ms": step.duration_ms,
             "success": step.success,
             "error": step.error,
+            "context": step.context,
         }

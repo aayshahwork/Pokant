@@ -35,6 +35,7 @@ const BASE_USAGE: UsageResponse = {
 const TASK_BROWSER_COSTLY: TaskResponse = {
   task_id: "01910000-0000-7000-8000-000000000001",
   url: "https://example.com/shop",
+  task_description: "Extract product data",
   status: "completed",
   success: true,
   result: { title: "Product" },
@@ -57,6 +58,7 @@ const TASK_BROWSER_COSTLY: TaskResponse = {
 const TASK_NATIVE_COSTLY: TaskResponse = {
   task_id: "01910000-0000-7000-8000-000000000002",
   url: "https://api.example.com/data",
+  task_description: "Fetch API records",
   status: "completed",
   success: true,
   result: { records: 42 },
@@ -79,6 +81,7 @@ const TASK_NATIVE_COSTLY: TaskResponse = {
 const TASK_FAILED_LLM: TaskResponse = {
   task_id: "01910000-0000-7000-8000-000000000003",
   url: "https://example.com/check",
+  task_description: "Health check",
   status: "failed",
   success: false,
   result: null,
@@ -101,6 +104,7 @@ const TASK_FAILED_LLM: TaskResponse = {
 const TASK_FAILED_NETWORK: TaskResponse = {
   task_id: "01910000-0000-7000-8000-000000000004",
   url: "https://slow.example.com",
+  task_description: "Scrape slow endpoint",
   status: "failed",
   success: false,
   result: null,

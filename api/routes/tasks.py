@@ -57,6 +57,7 @@ def _task_to_response(task: Task) -> TaskResponse:
     return TaskResponse(
         task_id=task.id,
         url=task.url,
+        task_description=task.task_description,
         status=task.status or "queued",
         success=task.success or False,
         result=result,
@@ -73,6 +74,7 @@ def _task_to_response(task: Task) -> TaskResponse:
         total_tokens_in=task.total_tokens_in or 0,
         total_tokens_out=task.total_tokens_out or 0,
         executor_mode=task.executor_mode or "browser_use",
+        analysis=task.analysis_json,
     )
 
 
@@ -106,6 +108,7 @@ async def create_task(
     try:
         await validate_url_async(str(body.url))
     except SSRFBlockedError as exc:
+        logger.warning("ssrf_blocked", url=str(body.url), reason=str(exc))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error_code": "INVALID_INPUT", "message": str(exc)},
@@ -311,6 +314,7 @@ async def ingest_task(
         executor_mode=body.executor_mode,
         created_at=created_at,
         completed_at=completed_at,
+        analysis_json=body.analysis,
     )
     db.add(task)
 
@@ -331,6 +335,7 @@ async def ingest_task(
             duration_ms=step.duration_ms,
             success=step.success,
             error_message=step.error,
+            context=step.context,
         )
         db.add(task_step)
 
@@ -348,6 +353,22 @@ async def ingest_task(
 
     await db.commit()
     await db.refresh(task)
+
+    # -- Evaluate alert conditions (best-effort, never blocks ingest) --
+    try:
+        from api.services.alert_evaluator import AlertEvaluator
+
+        evaluator = AlertEvaluator(db)
+        generated_alerts = await evaluator.evaluate(task)
+        if generated_alerts:
+            await db.commit()
+            logger.info(
+                "alerts_generated",
+                task_id=str(task_id),
+                count=len(generated_alerts),
+            )
+    except Exception:
+        logger.warning("alert_evaluation_failed", task_id=str(task_id), exc_info=True)
 
     logger.info("task_ingested", task_id=str(task_id), account_id=str(account.id), steps=len(body.steps))
     return _task_to_response(task)
@@ -623,6 +644,7 @@ async def get_task_steps(
             success=s.success if s.success is not None else True,
             error=s.error_message,
             created_at=s.created_at,
+            context=s.context,
         )
         for s in steps
     ]

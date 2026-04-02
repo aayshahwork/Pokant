@@ -18,6 +18,8 @@ import {
   mockTaskSteps,
   COMPLETED_TASK_FULL,
   COMPLETED_TASK_MINIMAL,
+  SDK_TASK,
+  SDK_SAMPLE_STEPS,
   SAMPLE_STEPS,
 } from "./fixtures";
 
@@ -101,12 +103,38 @@ test.describe("step timeline rendering", () => {
     ).toBeVisible();
   });
 
-  test("shows 'No screenshot captured' placeholder for steps without screenshots", async ({
+  test("shows 'Screenshot capture failed' for browser_use steps without screenshots", async ({
     authedPage: page,
   }) => {
     await gotoTaskWithSteps(page);
-    // Step 1 has screenshot_url: null
-    await expect(page.getByText("No screenshot captured")).toBeVisible();
+    // Step 1 has screenshot_url: null, task is browser_use
+    await expect(page.getByText("Screenshot capture failed for this step.")).toBeVisible();
+  });
+
+  test("shows non-visual message for SDK task with llm_call step", async ({
+    authedPage: page,
+  }) => {
+    await mockTaskDetail(page, SDK_TASK);
+    await mockTaskReplay(page, SDK_TASK.task_id);
+    await mockTaskSteps(page, SDK_TASK.task_id, SDK_SAMPLE_STEPS);
+    await page.goto(`/tasks/${SDK_TASK.task_id}`);
+
+    await expect(page.getByText(/No visual.*non-browser step/)).toBeVisible();
+  });
+
+  test("shows ObserviusTracker hint for SDK task with visual step missing screenshot", async ({
+    authedPage: page,
+  }) => {
+    await mockTaskDetail(page, SDK_TASK);
+    await mockTaskReplay(page, SDK_TASK.task_id);
+    await mockTaskSteps(page, SDK_TASK.task_id, SDK_SAMPLE_STEPS);
+    await page.goto(`/tasks/${SDK_TASK.task_id}`);
+
+    // Navigate to step 2 (action_type: "click", no screenshot)
+    const controls = page.locator(".flex.items-center.gap-1").first();
+    await controls.locator("button").nth(2).click();
+
+    await expect(page.getByText(/No screenshot.*ObserviusTracker/)).toBeVisible();
   });
 
   test("renders timeline bar with correct number of segments", async ({

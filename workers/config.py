@@ -23,7 +23,16 @@ worker_settings = WorkerSettings()
 
 
 def is_r2_configured() -> bool:
-    """Return True if R2 credentials are present and non-placeholder."""
+    """Return True if R2 credentials and endpoint are present and non-placeholder."""
     key = worker_settings.R2_ACCESS_KEY
     secret = worker_settings.R2_SECRET_KEY
-    return bool(key and secret and key != "your_r2_access_key" and secret != "your_r2_secret_key")
+    endpoint = worker_settings.R2_ENDPOINT
+    if not (key and secret and endpoint):
+        return False
+    placeholders = {"your_r2_access_key", "your_r2_secret_key", "your_r2_endpoint", "xxx"}
+    if key in placeholders or secret in placeholders:
+        return False
+    # Cloudflare R2 endpoints must have a valid account ID (32-char hex)
+    if "xxx" in endpoint or "your_" in endpoint:
+        return False
+    return True

@@ -18,6 +18,7 @@ export const FAKE_API_KEY = "sk-test-fake-key-for-e2e";
 export const COMPLETED_TASK_FULL: TaskResponse = {
   task_id: "aaaa0001-0000-7000-8000-000000000001",
   url: "https://example.com",
+  task_description: "Extract heading from example.com",
   status: "completed",
   success: true,
   result: { heading: "Example Domain" },
@@ -40,6 +41,7 @@ export const COMPLETED_TASK_FULL: TaskResponse = {
 export const FAILED_TASK_WITH_RETRY: TaskResponse = {
   task_id: "bbbb0002-0000-7000-8000-000000000002",
   url: "https://example.com/login",
+  task_description: "Log in and extract dashboard data",
   status: "failed",
   success: false,
   result: null,
@@ -62,6 +64,7 @@ export const FAILED_TASK_WITH_RETRY: TaskResponse = {
 export const COMPLETED_TASK_MINIMAL: TaskResponse = {
   task_id: "cccc0003-0000-7000-8000-000000000003",
   url: null,
+  task_description: null,
   status: "completed",
   success: true,
   result: null,
@@ -84,6 +87,7 @@ export const COMPLETED_TASK_MINIMAL: TaskResponse = {
 export const NATIVE_TASK: TaskResponse = {
   task_id: "dddd0004-0000-7000-8000-000000000004",
   url: "https://native.example.com",
+  task_description: "Screenshot-based navigation test",
   status: "completed",
   success: true,
   result: null,
@@ -101,6 +105,57 @@ export const NATIVE_TASK: TaskResponse = {
   total_tokens_out: 1_800,
   executor_mode: "native",
 };
+
+/** An SDK-tracked task (no browser page). */
+export const SDK_TASK: TaskResponse = {
+  task_id: "eeee0005-0000-7000-8000-000000000005",
+  url: null,
+  task_description: "SDK-tracked analytics pipeline",
+  status: "completed",
+  success: true,
+  result: null,
+  error: null,
+  replay_url: null,
+  steps: 2,
+  duration_ms: 3_000,
+  created_at: "2025-03-28T12:00:00.000Z",
+  completed_at: "2025-03-28T12:00:03.000Z",
+  retry_count: 0,
+  retry_of_task_id: null,
+  error_category: null,
+  cost_cents: 2,
+  total_tokens_in: 500,
+  total_tokens_out: 300,
+  executor_mode: "sdk",
+};
+
+/** Steps for the SDK task: one non-visual (llm_call) and one visual (click) without screenshots. */
+export const SDK_SAMPLE_STEPS: StepResponse[] = [
+  {
+    step_number: 1,
+    action_type: "llm_call",
+    description: "Invoke LLM for data classification",
+    screenshot_url: null,
+    tokens_in: 300,
+    tokens_out: 200,
+    duration_ms: 1_500,
+    success: true,
+    error: null,
+    created_at: "2025-03-28T12:00:01.000Z",
+  },
+  {
+    step_number: 2,
+    action_type: "click",
+    description: "Click export button",
+    screenshot_url: null,
+    tokens_in: 200,
+    tokens_out: 100,
+    duration_ms: 1_500,
+    success: true,
+    error: null,
+    created_at: "2025-03-28T12:00:02.500Z",
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Session fixtures

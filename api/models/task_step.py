@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, ForeignKey, Integer, String, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -25,6 +26,7 @@ class TaskStep(Base):
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     success: Mapped[bool | None] = mapped_column(Boolean, server_default=text("true"))
     error_message: Mapped[str | None] = mapped_column(String)
+    context: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime | None] = mapped_column(server_default=text("now()"))
 
     task: Mapped[Task] = relationship(back_populates="steps")

@@ -16,6 +16,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import base64
 import inspect
 import json
 import logging
@@ -71,6 +72,12 @@ class WrapConfig:
     # API reporting (optional)
     api_url: Optional[str] = None
     api_key: Optional[str] = None
+
+    # Alerts (optional)
+    alerts: Optional[Any] = None  # AlertConfig
+
+    # Analysis (optional)
+    analysis: Optional[Any] = None  # AnalysisConfig
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +161,8 @@ class WrappedAgent:
         self._replay_path: Optional[str] = None
         self._created_at: datetime = datetime.now(timezone.utc)
         self._start_time: float = 0.0
+        self._run_saved: bool = False
+        self._analysis: Any = None  # RunAnalysis, set by _run_analysis()
 
         self._stuck_detector: Optional[StuckDetector] = None
         if config.enable_stuck_detection:
@@ -162,6 +171,12 @@ class WrappedAgent:
                 action_threshold=config.stuck_action_threshold,
                 failure_threshold=config.stuck_failure_threshold,
             )
+
+        self._alert_emitter: Optional[Any] = None
+        if config.alerts is not None:
+            from computeruse.alerts import AlertEmitter
+
+            self._alert_emitter = AlertEmitter(config.alerts)
 
     # -- Public properties -------------------------------------------------
 
@@ -181,6 +196,11 @@ class WrappedAgent:
     def replay_path(self) -> Optional[str]:
         return self._replay_path
 
+    @property
+    def analysis(self) -> Any:
+        """Analysis result (:class:`RunAnalysis`), or ``None``."""
+        return self._analysis
+
     # -- Main entry point --------------------------------------------------
 
     async def run(self, max_steps: int = 100, **run_kwargs: Any) -> Any:
@@ -197,6 +217,15 @@ class WrappedAgent:
         self._start_time = time.monotonic()
         self._created_at = datetime.now(timezone.utc)
         last_exception: Optional[Exception] = None
+
+        # Ensure browser_use tracks token usage for cost calculation.
+        # The monolith passes calculate_cost=True at Agent construction;
+        # SDK users often omit it, causing $0.00 cost on every run.
+        try:
+            if not getattr(self._agent, "calculate_cost", False):
+                self._agent.calculate_cost = True
+        except (AttributeError, TypeError):
+            pass
 
         for attempt in range(self._config.max_retries + 1):
             try:
@@ -222,10 +251,15 @@ class WrappedAgent:
 
                 if self._config.track_cost:
                     self._calculate_cost(result)
+                    if self._alert_emitter:
+                        self._alert_emitter.check_cost(
+                            self._task_id, self._cost_cents,
+                        )
 
                 if self._stuck_detector:
                     self._stuck_detector.analyze_full_history(self._steps)
 
+                await self._run_analysis(status="completed")
                 self._save_outputs()
                 self._save_run_metadata(status="completed")
 
@@ -278,6 +312,14 @@ class WrappedAgent:
                         self._stuck_detector.reset()
                     continue
 
+                if self._alert_emitter:
+                    self._alert_emitter.emit_failure(
+                        self._task_id, str(exc), classified.category,
+                    )
+
+                await self._run_analysis(
+                    status="failed", error=str(exc),
+                )
                 self._save_run_metadata(status="failed", error=str(exc))
                 if self._config.api_url and self._config.api_key:
                     from computeruse._reporting import report_to_api
@@ -299,6 +341,16 @@ class WrappedAgent:
                         ),
                         created_at=self._created_at,
                     )
+                raise
+
+            except BaseException:
+                # KeyboardInterrupt, SystemExit — save partial data
+                if self._steps and not self._run_saved:
+                    try:
+                        self._save_outputs()
+                        self._save_run_metadata(status="interrupted")
+                    except Exception:
+                        pass
                 raise
 
         # All retries exhausted — should not normally reach here because the
@@ -334,11 +386,65 @@ class WrappedAgent:
                     signal.step_number,
                     signal.details,
                 )
+                if self._alert_emitter:
+                    self._alert_emitter.emit_stuck(
+                        self._task_id, signal.reason,
+                    )
                 stop_fn = getattr(agent, "stop", None)
                 if callable(stop_fn):
                     stop_fn()
         except Exception as exc:
             logger.debug("on_step_end stuck check failed: %s", exc)
+
+    # -- Analysis ----------------------------------------------------------
+
+    async def _run_analysis(
+        self, status: str, error: Optional[str] = None,
+    ) -> None:
+        """Run post-execution analysis if configured.  Never raises."""
+        if self._config.analysis is None:
+            return
+        try:
+            from computeruse.analyzer import AnalysisConfig, RunAnalyzer
+
+            config = self._config.analysis
+            if not isinstance(config, AnalysisConfig):
+                config = AnalysisConfig()
+            if not config.enable_analysis:
+                return
+
+            self._analysis = await RunAnalyzer(config).analyze(
+                self._steps, status, error,
+                getattr(self._agent, "task", ""),
+                self._config.output_dir,
+            )
+            if status == "failed" or (self._analysis and self._analysis.findings):
+                self._log_analysis()
+        except Exception:
+            logger.debug("Analysis failed", exc_info=True)
+
+    def _log_analysis(self) -> None:
+        """Log analysis results."""
+        if not self._analysis or not self._analysis.findings:
+            return
+        logger.info(
+            "\n%s\nOBSERVIUS ANALYSIS: %s\n%s",
+            "=" * 60, self._analysis.summary, "=" * 60,
+        )
+        logger.info("Suggestion: %s", self._analysis.primary_suggestion)
+        if self._analysis.wasted_steps > 0:
+            logger.info(
+                "Wasted: %d steps ($%.4f)",
+                self._analysis.wasted_steps,
+                self._analysis.wasted_cost_cents / 100,
+            )
+        for f in self._analysis.findings[:5]:
+            logger.info(
+                "  [Tier %d, %.0f%%] %s: %s", f.tier, f.confidence * 100,
+                f.category, f.summary,
+            )
+            logger.info("    -> %s", f.suggestion)
+        logger.info("=" * 60)
 
     # -- Step enrichment (mirrors workers/executor.py) ---------------------
 
@@ -367,9 +473,12 @@ class WrappedAgent:
                     timestamp=datetime.now(timezone.utc),
                 )
 
-                # Screenshot
+                # Screenshot — browser_use may return base64 strings or raw bytes
                 if i < len(screenshots) and screenshots[i]:
-                    step.screenshot_bytes = screenshots[i]
+                    ss = screenshots[i]
+                    if isinstance(ss, str):
+                        ss = base64.b64decode(ss)
+                    step.screenshot_bytes = ss
 
                 # Action type
                 if i < len(action_names) and action_names[i]:
@@ -404,16 +513,43 @@ class WrappedAgent:
                     if parts:
                         step.description = " | ".join(parts)[:500]
 
-                # Token counts + duration from metadata
+                # Token counts from metadata (browser_use <6.0)
                 meta = getattr(agent_step, "metadata", None)
                 if meta:
                     step.tokens_in = getattr(meta, "input_tokens", 0) or 0
                     step.tokens_out = getattr(meta, "output_tokens", 0) or 0
-                    step_dur = getattr(meta, "step_duration", None)
-                    if step_dur is not None:
-                        step.duration_ms = int(step_dur * 1000)
+                    # Duration: 6.0 uses duration_seconds property,
+                    # older versions use step_duration attribute.
+                    dur = getattr(meta, "duration_seconds", None)
+                    if dur is None:
+                        dur = getattr(meta, "step_duration", None)
+                    if dur is not None:
+                        step.duration_ms = int(dur * 1000)
 
                 self._steps.append(step)
+
+            # browser_use 6.0+: per-step metadata has no token counts.
+            # Distribute total tokens from result.usage evenly across steps.
+            has_step_tokens = any(
+                s.tokens_in > 0 or s.tokens_out > 0 for s in self._steps
+            )
+            if not has_step_tokens and self._steps:
+                usage = getattr(result, "usage", None)
+                if usage:
+                    total_in = getattr(usage, "total_prompt_tokens", 0) or 0
+                    total_out = (
+                        getattr(usage, "total_completion_tokens", 0) or 0
+                    )
+                    if total_in or total_out:
+                        n = len(self._steps)
+                        per_step_in = total_in // n
+                        per_step_out = total_out // n
+                        for j, s in enumerate(self._steps):
+                            s.tokens_in = per_step_in
+                            s.tokens_out = per_step_out
+                        # Give remainder to last step
+                        self._steps[-1].tokens_in += total_in % n
+                        self._steps[-1].tokens_out += total_out % n
 
         except Exception as exc:
             logger.warning(
@@ -425,21 +561,39 @@ class WrappedAgent:
     def _calculate_cost(self, result: Any) -> None:
         """Calculate cost in cents from browser_use result or step tokens."""
         try:
-            if hasattr(result, "total_cost"):
+            # Path 1: result.total_cost() — browser_use <6.0
+            if hasattr(result, "total_cost") and callable(
+                getattr(result, "total_cost")
+            ):
                 total_dollars = result.total_cost()
                 if total_dollars and total_dollars > 0:
                     self._cost_cents = total_dollars * 100
                     return
+
+            # Path 2: result.usage — browser_use 6.0+
             usage = getattr(result, "usage", None)
             if usage:
                 total_cost = getattr(usage, "total_cost", 0.0) or 0.0
                 if total_cost > 0:
                     self._cost_cents = total_cost * 100
                     return
+                # browser_use 6.0 tracks tokens but not dollar cost;
+                # calculate from prompt/completion token counts.
+                prompt_tokens = (
+                    getattr(usage, "total_prompt_tokens", 0) or 0
+                )
+                completion_tokens = (
+                    getattr(usage, "total_completion_tokens", 0) or 0
+                )
+                if prompt_tokens or completion_tokens:
+                    self._cost_cents = calculate_cost_cents(
+                        prompt_tokens, completion_tokens
+                    )
+                    return
         except Exception:
             pass
 
-        # Fallback: sum from per-step token counts
+        # Final fallback: sum from per-step token counts
         total_in = sum(s.tokens_in for s in self._steps)
         total_out = sum(s.tokens_out for s in self._steps)
         if total_in or total_out:
@@ -457,7 +611,10 @@ class WrappedAgent:
             for i, step in enumerate(self._steps):
                 if step.screenshot_bytes:
                     path = ss_dir / f"step_{i}.png"
-                    path.write_bytes(step.screenshot_bytes)
+                    screenshot_data = step.screenshot_bytes
+                    if isinstance(screenshot_data, str):
+                        screenshot_data = base64.b64decode(screenshot_data)
+                    path.write_bytes(screenshot_data)
                     step.screenshot_path = str(path)
 
         if self._config.generate_replay and self._steps:
@@ -474,7 +631,8 @@ class WrappedAgent:
                     "success": True,
                 }
                 generator = ReplayGenerator(
-                    steps=self._steps, task_metadata=task_metadata
+                    steps=self._steps, task_metadata=task_metadata,
+                    analysis=self._analysis,
                 )
                 generator.generate(replay_path)
                 self._replay_path = replay_path
@@ -487,6 +645,7 @@ class WrappedAgent:
         error: Optional[str] = None,
     ) -> None:
         """Save run metadata as JSON for external tooling."""
+        self._run_saved = True
         runs_dir = Path(self._config.output_dir) / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         metadata: Dict[str, Any] = {
@@ -513,10 +672,27 @@ class WrappedAgent:
                 }
                 for s in self._steps
             ],
+            "analysis": {
+                "summary": self._analysis.summary,
+                "primary_suggestion": self._analysis.primary_suggestion,
+                "wasted_steps": self._analysis.wasted_steps,
+                "wasted_cost_cents": self._analysis.wasted_cost_cents,
+                "tiers_executed": self._analysis.tiers_executed,
+                "findings": [
+                    {
+                        "tier": f.tier,
+                        "category": f.category,
+                        "summary": f.summary,
+                        "suggestion": f.suggestion,
+                        "confidence": f.confidence,
+                    }
+                    for f in self._analysis.findings
+                ],
+            } if self._analysis else None,
         }
         try:
             path = runs_dir / f"{self._task_id}.json"
-            path.write_text(json.dumps(metadata, indent=2))
+            path.write_text(json.dumps(metadata, indent=2, default=str))
         except Exception as exc:
             logger.warning("Failed to save run metadata: %s", exc)
 

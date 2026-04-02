@@ -136,35 +136,20 @@ class TaskExecutor:
 
             await agent.run(max_steps=config.max_steps)
 
-            # --- Extract step count from agent history ---
+            # --- Extract step data from agent history ---
             step_count = 0
-            if hasattr(agent, "history") and hasattr(agent.history, "history"):
-                step_count = len(agent.history.history)
-                print(f"[steps] agent.history.history → {step_count}")
-            elif hasattr(agent, "state") and hasattr(agent.state, "history"):
-                step_count = len(agent.state.history)
-                print(f"[steps] agent.state.history → {step_count}")
-            elif hasattr(agent, "n_steps"):
-                step_count = agent.n_steps
-                print(f"[steps] agent.n_steps → {step_count}")
-            elif hasattr(agent, "history"):
-                try:
-                    step_count = len(agent.history)
-                    print(f"[steps] len(agent.history) → {step_count}")
-                except Exception:
-                    pass
+            self.steps = self._extract_steps_from_agent(agent)
+            step_count = len(self.steps)
 
             # --- Extract result text from agent final state ---
             agent_result_text = ""
             if hasattr(agent, "state") and hasattr(agent.state, "result") and agent.state.result:
                 agent_result_text = str(agent.state.result)
-                print("[result] agent.state.result")
             elif hasattr(agent, "history") and hasattr(agent.history, "final_result"):
                 try:
                     fr = agent.history.final_result()
                     if fr:
                         agent_result_text = str(fr)
-                        print("[result] agent.history.final_result()")
                 except Exception:
                     pass
             if (
@@ -174,7 +159,6 @@ class TaskExecutor:
                 and agent.history.history
             ):
                 agent_result_text = str(agent.history.history[-1])
-                print("[result] last item in agent.history.history")
 
             # Extract structured output if schema provided
             extracted: Dict[str, Any] = {}
@@ -185,6 +169,10 @@ class TaskExecutor:
 
             replay_path = self._generate_replay(task_id, self.steps)
             duration_ms = int((time.monotonic() - start_time) * 1000)
+
+            total_in = sum(s.tokens_in for s in self.steps)
+            total_out = sum(s.tokens_out for s in self.steps)
+            cost_cents = self._estimate_cost(agent)
 
             console.log(f"[bold green]Task completed[/] in {duration_ms / 1000:.2f}s " f"({step_count} steps)")
 
@@ -198,6 +186,10 @@ class TaskExecutor:
                 duration_ms=duration_ms,
                 created_at=created_at,
                 completed_at=datetime.now(timezone.utc),
+                cost_cents=cost_cents,
+                total_tokens_in=total_in,
+                total_tokens_out=total_out,
+                step_data=self.steps,
             )
 
         except ValidationError as exc:
@@ -400,12 +392,124 @@ class TaskExecutor:
             raise TaskExecutionError(f"Could not parse JSON from extraction response: {exc}") from exc
 
     # ------------------------------------------------------------------
-    # Private: step callback
+    # Private: step extraction from agent history
     # ------------------------------------------------------------------
 
-    def _on_agent_step(self, *args: Any, **kwargs: Any) -> None:
-        """Callback invoked by the Browser Use agent after every action."""
-        self.steps.append(True)
+    # Maps browser_use action class names to our ActionType strings.
+    _ACTION_MAP: Dict[str, str] = {
+        "GoToUrlAction": "navigate",
+        "ClickElementAction": "click",
+        "InputTextAction": "type",
+        "ScrollAction": "scroll",
+        "ExtractPageContentAction": "extract",
+        "WaitAction": "wait",
+        "DoneAction": "extract",
+        "SendKeysAction": "type",
+        "SelectDropdownAction": "click",
+    }
+
+    def _extract_steps_from_agent(self, agent: Any) -> List[StepData]:
+        """Build StepData list from the browser_use agent's history.
+
+        Handles multiple browser_use API versions gracefully.
+        Returns an empty list if history is unavailable.
+        """
+        try:
+            history_items: List[Any] = []
+            if hasattr(agent, "history") and hasattr(agent.history, "history"):
+                history_items = list(agent.history.history)
+            elif hasattr(agent, "state") and hasattr(agent.state, "history"):
+                history_items = list(agent.state.history)
+            elif hasattr(agent, "history"):
+                try:
+                    history_items = list(agent.history)
+                except Exception:
+                    pass
+
+            if not history_items:
+                return []
+
+            steps: List[StepData] = []
+            for i, item in enumerate(history_items):
+                action_type = "unknown"
+                description = ""
+                tokens_in = 0
+                tokens_out = 0
+
+                # Extract action info
+                model_output = getattr(item, "model_output", None)
+                if model_output:
+                    actions = getattr(model_output, "action", None) or []
+                    if not isinstance(actions, list):
+                        actions = [actions]
+                    for act in actions:
+                        cls_name = type(act).__name__
+                        action_type = self._ACTION_MAP.get(cls_name, cls_name.lower().replace("action", ""))
+                        description = str(act) if act else ""
+                        break
+
+                # Extract token usage from the step's metadata
+                metadata = getattr(item, "metadata", None) or {}
+                if isinstance(metadata, dict):
+                    tokens_in = metadata.get("input_tokens", 0) or 0
+                    tokens_out = metadata.get("output_tokens", 0) or 0
+
+                # Try step-level token info from model_output
+                if not tokens_in and model_output:
+                    usage = getattr(model_output, "usage", None)
+                    if usage:
+                        tokens_in = getattr(usage, "input_tokens", 0) or 0
+                        tokens_out = getattr(usage, "output_tokens", 0) or 0
+
+                step_result = getattr(item, "result", None)
+                success = True
+                error = None
+                if step_result:
+                    err = getattr(step_result, "error", None)
+                    if err:
+                        success = False
+                        error = str(err)
+
+                steps.append(StepData(
+                    step_number=i + 1,
+                    action_type=action_type,
+                    description=description[:500],
+                    success=success,
+                    error=error,
+                    timestamp=datetime.now(timezone.utc),
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
+                ))
+
+            return steps
+
+        except Exception:
+            logger.debug("Could not extract steps from agent history", exc_info=True)
+            return []
+
+    def _estimate_cost(self, agent: Any) -> float:
+        """Estimate cost in cents from agent usage metadata.
+
+        Returns 0.0 if usage data is unavailable.
+        """
+        try:
+            # browser_use agents expose total_cost() on the history
+            if hasattr(agent, "history") and hasattr(agent.history, "total_cost"):
+                cost = agent.history.total_cost()
+                if cost and isinstance(cost, (int, float)):
+                    return round(cost * 100, 4)  # dollars to cents
+
+            # Fallback: sum from steps
+            total_in = sum(s.tokens_in for s in self.steps)
+            total_out = sum(s.tokens_out for s in self.steps)
+            if total_in or total_out:
+                # Approximate Sonnet pricing: $3/M in, $15/M out
+                return round((total_in * 3 + total_out * 15) / 1_000_000 * 100, 4)
+
+        except Exception:
+            logger.debug("Could not estimate cost", exc_info=True)
+
+        return 0.0
 
     # ------------------------------------------------------------------
     # Private: screenshot + replay

@@ -5,6 +5,7 @@ from .task import Task
 from .task_step import TaskStep
 from .session import Session
 from .audit_log import AuditLog
+from .alert import Alert
 
 __all__ = [
     "Base",
@@ -14,4 +15,5 @@ __all__ = [
     "TaskStep",
     "Session",
     "AuditLog",
+    "Alert",
 ]

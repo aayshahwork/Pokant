@@ -27,6 +27,7 @@ class StepIngestData(BaseModel):
     success: bool = True
     error: str | None = None
     screenshot_base64: str | None = None
+    context: dict[str, Any] | None = None
 
 
 class TaskIngestRequest(BaseModel):
@@ -46,6 +47,7 @@ class TaskIngestRequest(BaseModel):
     steps: list[StepIngestData] = []
     created_at: str | None = None
     completed_at: str | None = None
+    analysis: dict[str, Any] | None = None
 
     @field_validator("status")
     @classmethod
@@ -89,6 +91,7 @@ class TaskResponse(BaseModel):
 
     task_id: uuid.UUID
     url: str | None = None
+    task_description: str | None = None
     status: str
     success: bool = False
     result: dict[str, Any] | None = None
@@ -105,6 +108,7 @@ class TaskResponse(BaseModel):
     total_tokens_in: int = 0
     total_tokens_out: int = 0
     executor_mode: str = "browser_use"
+    analysis: dict[str, Any] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -130,6 +134,7 @@ class StepResponse(BaseModel):
     success: bool = True
     error: str | None = None
     created_at: datetime | None = None
+    context: dict[str, Any] | None = None
 
     model_config = {"from_attributes": True}
 

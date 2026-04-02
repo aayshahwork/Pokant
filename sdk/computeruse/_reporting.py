@@ -13,7 +13,7 @@ from typing import Any
 logger = logging.getLogger("observius")
 
 
-async def report_to_api(
+def _report_to_api_sync(
     api_url: str,
     api_key: str,
     task_id: str,
@@ -25,11 +25,12 @@ async def report_to_api(
     error_message: str | None,
     duration_ms: int,
     created_at: datetime | None,
+    analysis: dict | None = None,
 ) -> bool:
-    """POST run results to the Observius API ingest endpoint.
+    """Synchronous POST of run results to the Observius API ingest endpoint.
 
     Returns True if successful, False otherwise.
-    Never raises -- all errors are caught and logged at debug level.
+    Never raises -- all errors are caught and logged.
     """
     try:
         payload = {
@@ -54,6 +55,7 @@ async def report_to_api(
                     "success": getattr(s, "success", True),
                     "error": getattr(s, "error", None),
                     "screenshot_base64": _encode_screenshot(s),
+                    "context": _serialize_context(s),
                 }
                 for i, s in enumerate(steps)
             ],
@@ -63,6 +65,7 @@ async def report_to_api(
                 else datetime.now(timezone.utc).isoformat()
             ),
             "completed_at": datetime.now(timezone.utc).isoformat(),
+            "analysis": analysis,
         }
 
         data = json.dumps(payload).encode("utf-8")
@@ -81,8 +84,55 @@ async def report_to_api(
         return True
 
     except Exception:
-        logger.debug("Failed to report run %s to API", task_id, exc_info=True)
+        logger.warning("Failed to report run %s to %s", task_id, api_url, exc_info=True)
         return False
+
+
+async def report_to_api(
+    api_url: str,
+    api_key: str,
+    task_id: str,
+    task_description: str,
+    status: str,
+    steps: list[Any],
+    cost_cents: float,
+    error_category: str | None,
+    error_message: str | None,
+    duration_ms: int,
+    created_at: datetime | None,
+    analysis: dict | None = None,
+) -> bool:
+    """Async wrapper around :func:`_report_to_api_sync`.
+
+    Returns True if successful, False otherwise.
+    Never raises -- all errors are caught and logged.
+    """
+    return _report_to_api_sync(
+        api_url=api_url,
+        api_key=api_key,
+        task_id=task_id,
+        task_description=task_description,
+        status=status,
+        steps=steps,
+        cost_cents=cost_cents,
+        error_category=error_category,
+        error_message=error_message,
+        duration_ms=duration_ms,
+        created_at=created_at,
+        analysis=analysis,
+    )
+
+
+def _serialize_context(step: Any) -> dict | None:
+    """Extract and JSON-safe-serialize step context if present."""
+    ctx = getattr(step, "context", None)
+    if not ctx:
+        return None
+    try:
+        json.dumps(ctx, default=str)
+        return ctx
+    except (TypeError, ValueError):
+        return None
 
 
 def _encode_screenshot(step: Any) -> str | None:
@@ -91,6 +141,8 @@ def _encode_screenshot(step: Any) -> str | None:
     if not screenshot_bytes:
         return None
     try:
+        if isinstance(screenshot_bytes, str):
+            return screenshot_bytes
         return base64.b64encode(screenshot_bytes).decode("ascii")
     except Exception:
         return None

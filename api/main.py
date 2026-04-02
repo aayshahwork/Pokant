@@ -22,6 +22,8 @@ from api.routes.account import router as account_router
 from api.routes.audit import router as audit_router
 from api.routes.billing import router as billing_router
 from api.routes.sessions import router as sessions_router
+from api.routes.alerts import router as alerts_router
+from api.routes.analytics import router as analytics_router
 from api.routes.tasks import router as tasks_router
 
 # ---------------------------------------------------------------------------
@@ -91,6 +93,8 @@ app.add_middleware(PrometheusMiddleware)
 # ---------------------------------------------------------------------------
 
 app.include_router(tasks_router)
+app.include_router(analytics_router)
+app.include_router(alerts_router)
 app.include_router(sessions_router)
 app.include_router(billing_router)
 app.include_router(account_router)

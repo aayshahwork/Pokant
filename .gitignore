@@ -49,6 +49,7 @@ Thumbs.db
 .tasks/
 
 # SDK runtime output
+.observius/
 /replays/
 /sessions/
 *.egg-info/

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowUpDown, Search } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -156,14 +156,30 @@ export function TaskTable({
                     N
                   </Badge>
                 )}
+                {task.executor_mode === "sdk" && (
+                  <Badge
+                    variant="outline"
+                    className="px-1 py-0 text-[10px] leading-4 font-normal"
+                  >
+                    SDK
+                  </Badge>
+                )}
+                {task.status === "failed" && task.analysis && task.analysis.findings.length > 0 && (
+                  <Badge
+                    variant="outline"
+                    className="px-1 py-0 text-[10px] leading-4 font-normal text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700"
+                    title={task.analysis.primary_suggestion}
+                  >
+                    <Search className="size-2.5" />
+                  </Badge>
+                )}
               </div>
             </TableCell>
             <TableCell className="max-w-[200px] truncate font-medium">
-              {(task.result?.task_description as string) ??
-                task.task_id.slice(0, 8)}
+              {task.task_description || task.task_id.slice(0, 8)}
             </TableCell>
             <TableCell className="hidden md:table-cell text-muted-foreground">
-              {truncateUrl(task.replay_url ?? "")}
+              {truncateUrl(task.url ?? "")}
             </TableCell>
             <TableCell className="text-right tabular-nums">
               {task.steps}

@@ -1,0 +1,265 @@
+"""
+api/routes/analytics.py — Fleet health analytics endpoint.
+
+GET /api/v1/analytics/health   Pre-computed aggregates for fleet health monitoring
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from typing import Literal
+
+import structlog
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.dependencies import get_db
+from api.middleware.auth import get_current_account
+from api.models.account import Account
+from api.schemas.analytics import (
+    AlertSummary,
+    ErrorCategoryCount,
+    ExecutorBreakdown,
+    ExecutorStats,
+    FailingUrl,
+    HealthAnalyticsResponse,
+    HourlyBucket,
+    RetryStats,
+)
+
+logger = structlog.get_logger("api.analytics")
+
+router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics"])
+
+# Period → (timedelta, date_trunc bucket).
+# bucket values are hardcoded strings — safe for SQL interpolation.
+PERIOD_CONFIG: dict[str, tuple[timedelta, str]] = {
+    "1h": (timedelta(hours=1), "minute"),
+    "6h": (timedelta(hours=6), "hour"),
+    "24h": (timedelta(hours=24), "hour"),
+    "7d": (timedelta(days=7), "day"),
+    "30d": (timedelta(days=30), "day"),
+}
+
+
+@router.get("/health", response_model=HealthAnalyticsResponse)
+async def get_health_analytics(
+    period: Literal["1h", "6h", "24h", "7d", "30d"] = Query(default="24h"),
+    account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_db),
+) -> HealthAnalyticsResponse:
+    """Return pre-computed fleet health aggregates for the given period."""
+    delta, bucket = PERIOD_CONFIG[period]
+    assert bucket in ("minute", "hour", "day"), f"invalid bucket: {bucket!r}"
+    now = datetime.now(timezone.utc)
+    cutoff = now - delta
+    prev_cutoff = cutoff - delta
+    params: dict = {
+        "account_id": account.id,
+        "cutoff": cutoff,
+        "prev_cutoff": prev_cutoff,
+    }
+
+    # 1. Main aggregates --------------------------------------------------
+    main = (
+        await db.execute(
+            text("""
+                SELECT
+                    COUNT(*)                                              AS total_runs,
+                    COUNT(*) FILTER (WHERE status = 'completed')          AS completed,
+                    COUNT(*) FILTER (WHERE status = 'failed')             AS failed,
+                    COUNT(*) FILTER (WHERE status = 'timeout')            AS timeout,
+                    COALESCE(SUM(cost_cents)::float, 0)                   AS total_cost_cents,
+                    COALESCE(AVG(cost_cents)::float, 0)                   AS avg_cost_per_run,
+                    COALESCE(SUM(COALESCE(total_tokens_in, 0)
+                               + COALESCE(total_tokens_out, 0)), 0)::bigint AS total_tokens,
+                    COALESCE(AVG(duration_ms)::int, 0)                    AS avg_duration_ms
+                FROM tasks
+                WHERE account_id = :account_id AND created_at >= :cutoff
+            """),
+            params,
+        )
+    ).mappings().one()
+
+    # 2. Previous-period success rate (for trend) -------------------------
+    prev = (
+        await db.execute(
+            text("""
+                SELECT
+                    COUNT(*)                                     AS total,
+                    COUNT(*) FILTER (WHERE status = 'completed') AS completed
+                FROM tasks
+                WHERE account_id = :account_id
+                  AND created_at >= :prev_cutoff
+                  AND created_at <  :cutoff
+            """),
+            params,
+        )
+    ).mappings().one()
+
+    current_rate = main["completed"] / main["total_runs"] if main["total_runs"] else 0.0
+    prev_rate = prev["completed"] / prev["total"] if prev["total"] else 0.0
+    trend = round(current_rate - prev_rate, 4) if prev["total"] else 0.0
+
+    # 3. Top error categories ---------------------------------------------
+    top_errors = [
+        ErrorCategoryCount(category=r.category, count=r.count)
+        for r in await db.execute(
+            text("""
+                SELECT error_category AS category, COUNT(*) AS count
+                FROM tasks
+                WHERE account_id = :account_id
+                  AND created_at >= :cutoff
+                  AND error_category IS NOT NULL
+                GROUP BY error_category
+                ORDER BY count DESC
+                LIMIT 10
+            """),
+            params,
+        )
+    ]
+
+    # 4. Top failing URLs -------------------------------------------------
+    top_failing_urls = [
+        FailingUrl(url=r.url, failure_count=r.failure_count, last_failure=r.last_failure)
+        for r in await db.execute(
+            text("""
+                SELECT url,
+                       COUNT(*)        AS failure_count,
+                       MAX(created_at) AS last_failure
+                FROM tasks
+                WHERE account_id = :account_id
+                  AND created_at >= :cutoff
+                  AND status IN ('failed', 'timeout')
+                  AND url IS NOT NULL AND url != ''
+                GROUP BY url
+                ORDER BY failure_count DESC
+                LIMIT 10
+            """),
+            params,
+        )
+    ]
+
+    # 5. Time-series breakdown --------------------------------------------
+    # bucket comes from PERIOD_CONFIG (hardcoded) — safe for interpolation.
+    hourly_breakdown = [
+        HourlyBucket(
+            hour=r.bucket_ts,
+            completed=r.completed,
+            failed=r.failed,
+            cost_cents=round(r.cost_cents, 4),
+        )
+        for r in await db.execute(
+            text(f"""
+                SELECT
+                    date_trunc('{bucket}', created_at AT TIME ZONE 'UTC') AS bucket_ts,
+                    COUNT(*) FILTER (WHERE status = 'completed')          AS completed,
+                    COUNT(*) FILTER (WHERE status = 'failed')             AS failed,
+                    COALESCE(SUM(cost_cents)::float, 0)                   AS cost_cents
+                FROM tasks
+                WHERE account_id = :account_id AND created_at >= :cutoff
+                GROUP BY bucket_ts
+                ORDER BY bucket_ts
+            """),
+            params,
+        )
+    ]
+
+    # 6. Executor breakdown -----------------------------------------------
+    exec_map: dict[str, ExecutorStats] = {}
+    for r in await db.execute(
+        text("""
+            SELECT
+                COALESCE(executor_mode, 'browser_use')                      AS mode,
+                COUNT(*)                                                    AS count,
+                COUNT(*) FILTER (WHERE status = 'completed')::float
+                    / NULLIF(COUNT(*), 0)                                   AS success_rate,
+                COALESCE(AVG(cost_cents)::float, 0)                         AS avg_cost
+            FROM tasks
+            WHERE account_id = :account_id AND created_at >= :cutoff
+            GROUP BY mode
+        """),
+        params,
+    ):
+        exec_map[r.mode] = ExecutorStats(
+            count=r.count,
+            success_rate=round(r.success_rate or 0.0, 4),
+            avg_cost=round(r.avg_cost, 4),
+        )
+    empty = ExecutorStats(count=0, success_rate=0.0, avg_cost=0.0)
+    executor_breakdown = ExecutorBreakdown(
+        browser_use=exec_map.get("browser_use", empty),
+        native=exec_map.get("native", empty),
+        sdk=exec_map.get("sdk", empty),
+    )
+
+    # 7. Retry stats ------------------------------------------------------
+    retry_row = (
+        await db.execute(
+            text("""
+                SELECT
+                    COUNT(*)                                          AS total_retried,
+                    COUNT(*) FILTER (WHERE status = 'completed')::float
+                        / NULLIF(COUNT(*), 0)                         AS retry_success_rate,
+                    COALESCE(AVG(retry_count)::float, 0)              AS avg_attempts
+                FROM tasks
+                WHERE account_id = :account_id
+                  AND created_at >= :cutoff
+                  AND retry_of_task_id IS NOT NULL
+            """),
+            params,
+        )
+    ).mappings().one()
+    retry_stats = RetryStats(
+        total_retried=retry_row["total_retried"],
+        retry_success_rate=round(retry_row["retry_success_rate"] or 0.0, 4),
+        avg_attempts=round(retry_row["avg_attempts"], 2),
+    )
+
+    # 8. Alerts — graceful degradation if table doesn't exist -------------
+    # Only catch ProgrammingError (covers "relation does not exist" / pgcode 42P01).
+    # Other exceptions (connection errors, data errors) should propagate.
+    alerts: list[AlertSummary] = []
+    try:
+        alerts = [
+            AlertSummary(
+                id=r.id,
+                alert_type=r.alert_type,
+                message=r.message,
+                created_at=r.created_at,
+            )
+            for r in await db.execute(
+                text("""
+                    SELECT id, alert_type, message, created_at
+                    FROM alerts
+                    WHERE account_id = :account_id AND acknowledged = false
+                    ORDER BY created_at DESC
+                    LIMIT 10
+                """),
+                {"account_id": account.id},
+            )
+        ]
+    except ProgrammingError:
+        logger.debug("alerts_table_unavailable", account_id=str(account.id))
+
+    return HealthAnalyticsResponse(
+        period=period,
+        total_runs=main["total_runs"],
+        completed=main["completed"],
+        failed=main["failed"],
+        timeout=main["timeout"],
+        success_rate=round(current_rate, 4),
+        success_rate_trend=trend,
+        total_cost_cents=round(main["total_cost_cents"], 4),
+        avg_cost_per_run=round(main["avg_cost_per_run"], 4),
+        total_tokens=main["total_tokens"],
+        avg_duration_ms=main["avg_duration_ms"],
+        top_errors=top_errors,
+        top_failing_urls=top_failing_urls,
+        hourly_breakdown=hourly_breakdown,
+        executor_breakdown=executor_breakdown,
+        retry_stats=retry_stats,
+        alerts=alerts,
+    )

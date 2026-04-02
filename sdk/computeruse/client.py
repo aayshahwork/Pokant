@@ -74,6 +74,8 @@ class ComputerUse:
         model: str = settings.DEFAULT_MODEL,
         headless: bool = False,
         browserbase_api_key: Optional[str] = None,
+        observius_api_url: Optional[str] = None,
+        observius_api_key: Optional[str] = None,
     ) -> None:
         """Initialise the ComputerUse client.
 
@@ -86,6 +88,10 @@ class ComputerUse:
             headless: Run the browser without a visible window.
             browserbase_api_key: BrowserBase API key for managed remote
                 browsers in local mode.
+            observius_api_url: Base URL of the Observius API for automatic
+                run reporting.  Falls back to ``OBSERVIUS_API_URL`` env var.
+            observius_api_key: API key for the Observius ingest endpoint.
+                Falls back to ``OBSERVIUS_API_KEY`` env var.
 
         Raises:
             ValueError: If ``local=False`` and no ``api_key`` is provided.
@@ -95,6 +101,8 @@ class ComputerUse:
         self.model = model
         self.headless = headless
         self.browserbase_api_key = browserbase_api_key or settings.BROWSERBASE_API_KEY
+        self.observius_api_url = observius_api_url or settings.OBSERVIUS_API_URL
+        self.observius_api_key = observius_api_key or settings.OBSERVIUS_API_KEY
 
         if not local and not api_key:
             raise ValueError(
@@ -265,6 +273,29 @@ class ComputerUse:
 
         result = await self._dispatch(config)
         self._cache_result(result)
+
+        # Best-effort reporting to Observius dashboard
+        if self.local and self.observius_api_url and self.observius_api_key:
+            try:
+                from computeruse._reporting import report_to_api
+
+                await report_to_api(
+                    api_url=self.observius_api_url,
+                    api_key=self.observius_api_key,
+                    task_id=result.task_id,
+                    task_description=config.task,
+                    status=result.status,
+                    steps=result.step_data,
+                    cost_cents=result.cost_cents,
+                    error_category=result.error_category,
+                    error_message=result.error,
+                    duration_ms=result.duration_ms,
+                    created_at=result.created_at,
+                )
+                logger.info("Reported task %s to Observius API", result.task_id)
+            except Exception:
+                logger.debug("Observius API reporting failed (best-effort)", exc_info=True)
+
         return result
 
     # ------------------------------------------------------------------
