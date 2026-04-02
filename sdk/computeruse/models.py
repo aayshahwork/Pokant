@@ -245,6 +245,7 @@ class TaskResult:
     total_tokens_out: int = 0
     error_category: Optional[str] = None
     step_data: List[Any] = field(default_factory=list)
+    analysis: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-compatible dict.

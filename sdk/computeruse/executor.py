@@ -175,6 +175,10 @@ class TaskExecutor:
             total_out = sum(s.tokens_out for s in self.steps)
             cost_cents = self._estimate_cost(agent)
 
+            analysis = await self._run_analysis(
+                "completed", None, config.task,
+            )
+
             console.log(f"[bold green]Task completed[/] in {duration_ms / 1000:.2f}s " f"({step_count} steps)")
 
             return TaskResult(
@@ -191,15 +195,16 @@ class TaskExecutor:
                 total_tokens_in=total_in,
                 total_tokens_out=total_out,
                 step_data=self.steps,
+                analysis=analysis,
             )
 
         except ValidationError as exc:
-            return self._failed_result(task_id, created_at, start_time, str(exc))
+            return self._failed_result(task_id, created_at, start_time, str(exc), config.task)
         except TaskExecutionError as exc:
-            return self._failed_result(task_id, created_at, start_time, str(exc))
+            return self._failed_result(task_id, created_at, start_time, str(exc), config.task)
         except Exception as exc:
             logger.exception("Unexpected error during task %s", task_id)
-            return self._failed_result(task_id, created_at, start_time, f"Unexpected error: {exc}")
+            return self._failed_result(task_id, created_at, start_time, f"Unexpected error: {exc}", config.task)
 
     # ------------------------------------------------------------------
     # Private: agent execution
@@ -588,6 +593,76 @@ class TaskExecutor:
         return 0.0
 
     # ------------------------------------------------------------------
+    # Private: analysis
+    # ------------------------------------------------------------------
+
+    def _serialize_analysis(self, result: Any) -> Optional[Dict[str, Any]]:
+        """Convert a RunAnalysis to a JSON-safe dict for API reporting."""
+        if result is None:
+            return None
+        return {
+            "summary": result.summary,
+            "primary_suggestion": result.primary_suggestion,
+            "wasted_steps": result.wasted_steps,
+            "wasted_cost_cents": result.wasted_cost_cents,
+            "tiers_executed": list(result.tiers_executed),
+            "findings": [
+                {
+                    "tier": f.tier,
+                    "category": f.category,
+                    "summary": f.summary,
+                    "suggestion": f.suggestion,
+                    "confidence": f.confidence,
+                }
+                for f in result.findings
+            ],
+        }
+
+    async def _run_analysis(
+        self,
+        status: str,
+        error: Optional[str],
+        task_description: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Run post-execution analysis (async). Never raises."""
+        try:
+            from computeruse.analyzer import AnalysisConfig, RunAnalyzer
+
+            config = AnalysisConfig(
+                llm_api_key=settings.ANTHROPIC_API_KEY,
+            )
+            analyzer = RunAnalyzer(config)
+            result = await analyzer.analyze(
+                self.steps, status, error, task_description,
+            )
+            return self._serialize_analysis(result)
+        except Exception:
+            logger.debug("Post-execution analysis failed", exc_info=True)
+            return None
+
+    def _run_analysis_sync(
+        self,
+        status: str,
+        error: Optional[str],
+        task_description: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Run post-execution analysis (sync). Never raises."""
+        try:
+            from computeruse.analyzer import AnalysisConfig, RunAnalyzer
+
+            config = AnalysisConfig(
+                llm_api_key=settings.ANTHROPIC_API_KEY,
+            )
+            analyzer = RunAnalyzer(config)
+            result = analyzer.analyze_sync(
+                self.steps, status, error, task_description,
+            )
+            return self._serialize_analysis(result)
+        except Exception:
+            logger.debug("Post-execution analysis failed (sync)", exc_info=True)
+            return None
+
+    # ------------------------------------------------------------------
     # Private: screenshot + replay
     # ------------------------------------------------------------------
 
@@ -672,21 +747,28 @@ class TaskExecutor:
         created_at: datetime,
         start_time: float,
         error: str,
+        task_description: str = "",
     ) -> TaskResult:
         """Build a uniformly structured failed :class:`TaskResult`.
 
         Args:
-            task_id:    The task's unique identifier.
-            created_at: UTC timestamp when the task was created.
-            start_time: ``time.monotonic()`` value recorded at task start,
-                        used to compute ``duration_ms``.
-            error:      Human-readable error description.
+            task_id:          The task's unique identifier.
+            created_at:       UTC timestamp when the task was created.
+            start_time:       ``time.monotonic()`` value recorded at task start,
+                              used to compute ``duration_ms``.
+            error:            Human-readable error description.
+            task_description: Original task text, passed to the analyzer.
 
         Returns:
             A :class:`TaskResult` with ``success=False`` and ``status="failed"``.
         """
         duration_ms = int((time.monotonic() - start_time) * 1000)
         console.log(f"[bold red]Task failed:[/] {error}")
+
+        analysis = self._run_analysis_sync(
+            "failed", error, task_description,
+        )
+
         return TaskResult(
             task_id=task_id,
             status="failed",
@@ -696,4 +778,6 @@ class TaskExecutor:
             duration_ms=duration_ms,
             created_at=created_at,
             completed_at=datetime.now(timezone.utc),
+            step_data=self.steps,
+            analysis=analysis,
         )

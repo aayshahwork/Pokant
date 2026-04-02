@@ -291,6 +291,7 @@ class ComputerUse:
                     error_message=result.error,
                     duration_ms=result.duration_ms,
                     created_at=result.created_at,
+                    analysis=result.analysis,
                 )
                 logger.info("Reported task %s to Observius API", result.task_id)
             except Exception:

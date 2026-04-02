@@ -117,6 +117,34 @@ function getNoScreenshotMessage(
 function StepContext({ context }: { context: Record<string, unknown> }) {
   const type = context.type as string | undefined;
 
+  if (type === "subtask") {
+    const name = context.subtask_name as string | undefined;
+    const num = context.subtask_number as number | undefined;
+    const total = context.subtask_total as number | undefined;
+    const url = context.subtask_url as string | undefined;
+    if (!name) return null;
+    return (
+      <div>
+        <div className="flex items-center gap-2 rounded-md border bg-primary/5 px-3 py-2">
+          <Layers className="size-4 shrink-0 text-primary" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              {num != null && total != null && (
+                <Badge variant="outline" className="text-[10px] shrink-0">
+                  {num}/{total}
+                </Badge>
+              )}
+              <span className="text-sm font-medium truncate">{name}</span>
+            </div>
+            {url && (
+              <p className="text-xs text-muted-foreground truncate mt-0.5">{url}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (type === "desktop_action") {
     const windowTitle = context.window_title as string | undefined;
     const coords = context.coordinates as { x: number; y: number } | undefined;
