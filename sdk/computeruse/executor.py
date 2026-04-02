@@ -131,7 +131,7 @@ class TaskExecutor:
                 task=prompt,
                 llm=llm,
                 browser=browser,
-                use_vision=False,  # use DOM text instead of screenshots
+                use_vision=True,
                 max_actions_per_step=10,  # more actions per LLM call
             )
 
