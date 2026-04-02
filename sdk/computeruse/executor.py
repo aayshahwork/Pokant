@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import time
@@ -134,11 +135,11 @@ class TaskExecutor:
                 max_actions_per_step=10,  # more actions per LLM call
             )
 
-            await agent.run(max_steps=config.max_steps)
+            run_result = await agent.run(max_steps=config.max_steps)
 
             # --- Extract step data from agent history ---
             step_count = 0
-            self.steps = self._extract_steps_from_agent(agent)
+            self.steps = self._extract_steps_from_agent(agent, run_result)
             step_count = len(self.steps)
 
             # --- Extract result text from agent final state ---
@@ -408,11 +409,22 @@ class TaskExecutor:
         "SelectDropdownAction": "click",
     }
 
-    def _extract_steps_from_agent(self, agent: Any) -> List[StepData]:
+    def _extract_steps_from_agent(self, agent: Any, run_result: Any = None) -> List[StepData]:
         """Build StepData list from the browser_use agent's history.
 
-        Handles multiple browser_use API versions gracefully.
-        Returns an empty list if history is unavailable.
+        Extracts action info, token usage, errors, and screenshots from
+        the agent run result.  Screenshots are pulled from
+        ``run_result.screenshots()`` (the canonical browser_use API) with
+        fallbacks for per-step ``result.screenshot`` attributes.
+
+        Args:
+            agent:      The browser_use Agent instance (post-run).
+            run_result: The AgentHistoryList returned by ``agent.run()``.
+                        Used to extract screenshots via ``.screenshots()``.
+
+        Returns:
+            Ordered list of :class:`StepData`.  Empty list if history is
+            unavailable.
         """
         try:
             history_items: List[Any] = []
@@ -429,6 +441,24 @@ class TaskExecutor:
             if not history_items:
                 return []
 
+            # -- Extract screenshots from run_result (matches wrap.py) --------
+            screenshots: List[Any] = []
+            if run_result is not None:
+                try:
+                    if hasattr(run_result, "screenshots"):
+                        screenshots = run_result.screenshots() or []
+                except Exception:
+                    logger.debug("Could not extract screenshots from run result", exc_info=True)
+
+            # -- Extract action names from run_result -------------------------
+            action_names: List[str] = []
+            if run_result is not None:
+                try:
+                    if hasattr(run_result, "action_names"):
+                        action_names = run_result.action_names() or []
+                except Exception:
+                    pass
+
             steps: List[StepData] = []
             for i, item in enumerate(history_items):
                 action_type = "unknown"
@@ -436,15 +466,29 @@ class TaskExecutor:
                 tokens_in = 0
                 tokens_out = 0
 
-                # Extract action info
+                # Action type — prefer run_result.action_names(), fall back to model_output
+                if i < len(action_names) and action_names[i]:
+                    action_type = self._ACTION_MAP.get(
+                        action_names[i],
+                        action_names[i].lower().replace("action", ""),
+                    )
+
+                # Extract action info from model_output
                 model_output = getattr(item, "model_output", None)
                 if model_output:
+                    if action_type == "unknown":
+                        actions = getattr(model_output, "action", None) or []
+                        if not isinstance(actions, list):
+                            actions = [actions]
+                        for act in actions:
+                            cls_name = type(act).__name__
+                            action_type = self._ACTION_MAP.get(cls_name, cls_name.lower().replace("action", ""))
+                            break
+                    # Build description from the first action
                     actions = getattr(model_output, "action", None) or []
                     if not isinstance(actions, list):
                         actions = [actions]
                     for act in actions:
-                        cls_name = type(act).__name__
-                        action_type = self._ACTION_MAP.get(cls_name, cls_name.lower().replace("action", ""))
                         description = str(act) if act else ""
                         break
 
@@ -470,6 +514,37 @@ class TaskExecutor:
                         success = False
                         error = str(err)
 
+                # -- Screenshot extraction ------------------------------------
+                screenshot_bytes: Optional[bytes] = None
+
+                # Primary: from run_result.screenshots() (browser_use canonical API)
+                if i < len(screenshots) and screenshots[i]:
+                    ss = screenshots[i]
+                    if isinstance(ss, bytes):
+                        screenshot_bytes = ss
+                    elif isinstance(ss, str):
+                        try:
+                            screenshot_bytes = base64.b64decode(ss)
+                        except Exception:
+                            screenshot_bytes = ss.encode("utf-8")
+
+                # Fallback: per-step result may carry a screenshot attribute
+                if screenshot_bytes is None and step_result is not None:
+                    sr_ss = getattr(step_result, "screenshot", None)
+                    if sr_ss is None and isinstance(step_result, list):
+                        for r in step_result:
+                            sr_ss = getattr(r, "screenshot", None)
+                            if sr_ss:
+                                break
+                    if sr_ss:
+                        if isinstance(sr_ss, bytes):
+                            screenshot_bytes = sr_ss
+                        elif isinstance(sr_ss, str):
+                            try:
+                                screenshot_bytes = base64.b64decode(sr_ss)
+                            except Exception:
+                                screenshot_bytes = sr_ss.encode("utf-8")
+
                 steps.append(StepData(
                     step_number=i + 1,
                     action_type=action_type,
@@ -479,6 +554,7 @@ class TaskExecutor:
                     timestamp=datetime.now(timezone.utc),
                     tokens_in=tokens_in,
                     tokens_out=tokens_out,
+                    screenshot_bytes=screenshot_bytes,
                 ))
 
             return steps
