@@ -109,6 +109,43 @@ asyncio.run(main())
 
 Install Stagehand separately: `pip install observius stagehand` (or `pip install observius[stagehand]`).
 
+## Quick Start: Explore-to-Replay
+
+Run a task once with AI, compile it into a deterministic workflow, then replay it for free:
+
+```bash
+# 1. Run a task (AI-driven, costs tokens)
+computeruse run --url https://example.com --task "Log in and export the report"
+
+# 2. Compile the successful run into a replayable workflow
+computeruse compile abc123 --name "export-report" --params "email,password"
+
+# 3. Replay deterministically (no AI, no tokens, ~$0.00)
+computeruse replay export-report --params '{"email":"me@co.com","password":"hunter2"}'
+```
+
+Or from Python:
+
+```python
+from computeruse import WorkflowCompiler, ReplayExecutor, ReplayConfig
+
+# Compile
+compiler = WorkflowCompiler()
+workflow = compiler.compile_from_run(".observius/runs/abc123.json")
+compiler.save_workflow(workflow)
+
+# Replay
+executor = ReplayExecutor(config=ReplayConfig(headless=True, max_cost_cents=10))
+result = await executor.execute(workflow, params={"email": "me@co.com"}, page=page)
+print(f"Steps: {result.steps_executed}, Cost: ${result.cost_cents/100:.4f}")
+```
+
+The replay executor uses a 4-tier fallback cascade:
+- **Tier 0**: Direct selector replay (deterministic, free)
+- **Tier 1**: Selector healing via alternate selectors and text search (free)
+- **Tier 2**: Single-shot AI call for selector recovery (cheap)
+- **Tier 3**: Full AI fallback (configurable)
+
 ## View Results
 
 ```bash
@@ -121,7 +158,7 @@ Or from the CLI:
 ```bash
 computeruse info          # summary of runs, costs, screenshots
 computeruse clean         # delete runs older than 7 days
-computeruse replay .observius/replays/abc123.html
+computeruse open .observius/replays/abc123.html
 ```
 
 ## Features
@@ -129,12 +166,17 @@ computeruse replay .observius/replays/abc123.html
 - **Auto-retry** with exponential backoff and error classification
 - **Stuck detection** catches looping agents (repeated screenshots, actions, failures)
 - **Cost tracking** from token counts or browser-use's built-in totals
+- **Cost circuit breakers** via BudgetMonitor — set a max spend per run and halt before overruns
 - **Screenshot capture** at every step, saved to disk
 - **HTML replay** generation for visual debugging
+- **Workflow compiler** turns successful AI runs into deterministic Playwright workflows
+- **Workflow replay** with 4-tier fallback (direct → heal → AI single-shot → full AI)
+- **Post-action verification** confirms each step's expected outcome (URL, element, text)
+- **Step enrichment** extracts selectors, intents, and metadata for compiled workflows
 - **Run metadata** persisted as JSON for programmatic analysis
 - **Session persistence** saves/restores cookies across runs
 - **Error classification** maps exceptions to categories (transient, auth, timeout, etc.)
-- **CLI tools** for inspecting runs, launching the dashboard, and cleanup
+- **CLI tools** for compiling, replaying, inspecting runs, and launching the dashboard
 
 ## Configuration
 
@@ -179,19 +221,59 @@ async with track(page, config=config) as t:
     await t.goto("https://example.com")
 ```
 
+## Post-Action Verification
+
+The `ActionVerifier` checks each step's outcome after execution:
+
+```python
+from computeruse import ActionVerifier
+
+verifier = ActionVerifier()
+result = await verifier.verify_action(
+    page,
+    action_type="click",
+    expected_url_pattern="*/dashboard*",
+    expected_element="#welcome-banner",
+    expected_text="Welcome back",
+    pre_url="https://app.example.com/login",
+)
+print(result.passed, result.checks_run)  # True, 3
+```
+
+Verification is built into both `track()` (for enriched steps) and `ReplayExecutor` (for workflow replay). Failures are recorded as warnings, not hard errors, so flaky checks don't block execution.
+
+## Cost Circuit Breakers
+
+`BudgetMonitor` enforces a per-run cost ceiling:
+
+```python
+from computeruse import BudgetMonitor, BudgetExceededError
+
+monitor = BudgetMonitor(max_cost_cents=25.0)
+
+# Record costs as they occur — raises BudgetExceededError when ceiling is hit
+cost = monitor.record_step_cost(tokens_in=1500, tokens_out=200)
+```
+
+The `wrap()` function integrates BudgetMonitor automatically — set `max_cost_cents` in `WrapConfig`. The `ReplayExecutor` also accepts a budget via `ReplayConfig.max_cost_cents` and halts replay if AI fallback costs exceed the limit.
+
 ## Architecture
 
 ```
 Your Agent --> wrap() / track() / observe_stagehand() --> Observius Layer ----> .observius/
                                     |                     |-- runs/*.json
                                     |-- Error Classifier  |-- screenshots/
-                                    |-- Auto-Retry        '-- replays/*.html
-                                    |-- Stuck Detector
+                                    |-- Auto-Retry        |-- replays/*.html
+                                    |-- Stuck Detector    '-- workflows/*.json
                                     |-- Cost Tracker
+                                    |-- Budget Monitor
                                     '-- Session Manager
                                              |
-                                             v
-                                    computeruse dashboard
+                              +--------------+--------------+
+                              |              |              |
+                              v              v              v
+                     computeruse      WorkflowCompiler  ReplayExecutor
+                      dashboard       (compile runs)    (replay workflows)
 ```
 
 ## Any Language, Any Agent
@@ -271,9 +353,11 @@ See [examples/desktop_pyautogui.py](examples/desktop_pyautogui.py) and [examples
 | Command | Description |
 |---------|-------------|
 | `computeruse run --url URL --task TASK` | Run a browser automation task |
+| `computeruse compile TASK_ID` | Compile a successful run into a replayable workflow |
+| `computeruse replay WORKFLOW_ID` | Replay a compiled workflow against a live browser |
 | `computeruse info` | Show summary of run data |
 | `computeruse dashboard` | Launch local debugging dashboard |
-| `computeruse replay FILE` | Open a replay in the browser |
+| `computeruse open FILE` | Open a replay file in the browser |
 | `computeruse sessions` | List saved browser sessions |
 | `computeruse clean` | Delete old run data |
 | `computeruse version` | Print installed version |
@@ -298,6 +382,12 @@ See [examples/desktop_pyautogui.py](examples/desktop_pyautogui.py) and [examples
 | `StuckDetector` | class | Detect looping agents from step history |
 | `ReplayGenerator` | class | Generate HTML replay from step data |
 | `calculate_cost_cents(tokens_in, tokens_out)` | function | Estimate cost from token counts |
+| `WorkflowCompiler` | class | Compile enriched runs into replayable workflows |
+| `ReplayExecutor` | class | Execute compiled workflows with 4-tier fallback |
+| `ReplayConfig` | dataclass | Configuration for `ReplayExecutor` |
+| `ReplayResult` | dataclass | Result of workflow replay execution |
+| `BudgetMonitor` | class | Cost circuit breaker with per-run ceiling |
+| `ActionVerifier` | class | Post-action verification (URL, element, text) |
 
 ## Contributing
 

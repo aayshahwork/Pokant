@@ -55,13 +55,14 @@ tr.row:hover{background:var(--surface);cursor:pointer}
   <h1>Observius</h1>
   <div class="tabs">
     <div class="tab" data-tab="runs" onclick="navigate('#/')">Runs</div>
+    <div class="tab" data-tab="workflows" onclick="navigate('#/workflows')">Workflows</div>
     <div class="tab" data-tab="stats" onclick="navigate('#/stats')">Stats</div>
   </div>
 </div>
 <div class="container" id="app"></div>
 <script>
 const $ = id => document.getElementById(id);
-let runs = [], currentStep = 0;
+let runs = [], workflows = [], currentStep = 0;
 
 async function fetchJSON(url) {
   const r = await fetch(url);
@@ -80,8 +81,7 @@ function fmtTime(iso) {
 function truncId(id) { return id.length > 12 ? id.slice(0, 8) + '...' : id; }
 
 function renderRuns() {
-  document.querySelector('[data-tab="runs"]').classList.add('active');
-  document.querySelector('[data-tab="stats"]').classList.remove('active');
+  setActiveTab('runs');
   if (!runs.length) { $('app').innerHTML = '<div class="empty">No runs found</div>'; return; }
   const sorted = [...runs].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   $('app').innerHTML = `<table>
@@ -98,7 +98,7 @@ function renderRuns() {
 }
 
 function renderDetail(id) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  setActiveTab('');
   const run = runs.find(r => r.task_id === id);
   if (!run) { $('app').innerHTML = '<div class="empty">Run not found</div>'; return; }
   const steps = run.steps || [];
@@ -157,9 +157,56 @@ function renderDetail(id) {
   window._goStep = function(i) { currentStep = Math.max(0, Math.min(i, steps.length - 1)); update(); };
 }
 
+function setActiveTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+}
+
+function renderWorkflows() {
+  setActiveTab('workflows');
+  if (!workflows.length) { $('app').innerHTML = '<div class="empty">No compiled workflows yet.<br><br><span style="color:var(--dim)">Compile a run: <code>computeruse compile &lt;task_id&gt;</code></span></div>'; return; }
+  $('app').innerHTML = `<table>
+    <thead><tr><th>Name</th><th>Steps</th><th>Parameters</th><th>Compiled</th></tr></thead>
+    <tbody>${workflows.map(w => `<tr class="row" onclick="navigate('#/workflow/${encodeURIComponent(w.name)}')">
+      <td><span class="dot completed"></span>${w.name}</td>
+      <td>${(w.steps || []).length}</td>
+      <td class="mono">${Object.keys(w.parameters || {}).join(', ') || '-'}</td>
+      <td class="mono">${fmtTime(w.compiled_at)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+function renderWorkflowDetail(name) {
+  setActiveTab('workflows');
+  const wf = workflows.find(w => w.name === name);
+  if (!wf) { $('app').innerHTML = '<div class="empty">Workflow not found</div>'; return; }
+  const steps = wf.steps || [];
+  const paramKeys = Object.keys(wf.parameters || {});
+
+  $('app').innerHTML = `
+    <div class="back" onclick="navigate('#/workflows')">&larr; Back to workflows</div>
+    <div class="detail-header">
+      <div class="card"><h3>Workflow</h3><div style="font-size:18px;font-weight:600">${wf.name}</div>
+        ${wf.task_description ? `<div class="mono" style="margin-top:4px">${wf.task_description}</div>` : ''}
+        <div class="mono" style="margin-top:4px">${fmtTime(wf.compiled_at)}</div></div>
+      <div class="card"><h3>Summary</h3>
+        <div>${steps.length} steps &middot; ${paramKeys.length} parameter${paramKeys.length !== 1 ? 's' : ''}</div>
+        ${paramKeys.length ? `<div class="mono" style="margin-top:4px">Params: ${paramKeys.join(', ')}</div>` : ''}
+        <div style="margin-top:8px;color:var(--green)">Replay cost: ~$0.00 (deterministic)</div></div>
+    </div>
+    <div class="card"><h3>Steps</h3>
+      <table style="margin-top:8px">
+        <thead><tr><th>#</th><th>Action</th><th>Intent</th><th>Selector</th></tr></thead>
+        <tbody>${steps.map((s, i) => `<tr>
+          <td>${i + 1}</td>
+          <td><span style="color:var(--blue)">${s.action_type || '-'}</span></td>
+          <td>${s.intent || '-'}</td>
+          <td class="mono">${s.selectors && s.selectors.length ? s.selectors[0].value || '-' : '-'}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
 function renderStats() {
-  document.querySelector('[data-tab="runs"]').classList.remove('active');
-  document.querySelector('[data-tab="stats"]').classList.add('active');
+  setActiveTab('stats');
   fetchJSON('/api/stats').then(stats => {
     if (!stats) { $('app').innerHTML = '<div class="empty">No data</div>'; return; }
     const cats = stats.error_categories || {};
@@ -184,13 +231,18 @@ function renderStats() {
 }
 
 async function init() {
-  runs = await fetchJSON('/api/runs') || [];
+  [runs, workflows] = await Promise.all([
+    fetchJSON('/api/runs').then(r => r || []),
+    fetchJSON('/api/workflows').then(r => r || []),
+  ]);
   route();
 }
 
 function route() {
   const h = location.hash || '#/';
   if (h.startsWith('#/run/')) renderDetail(decodeURIComponent(h.slice(6)));
+  else if (h.startsWith('#/workflow/')) renderWorkflowDetail(decodeURIComponent(h.slice(11)));
+  else if (h === '#/workflows') renderWorkflows();
   else if (h === '#/stats') renderStats();
   else renderRuns();
 }

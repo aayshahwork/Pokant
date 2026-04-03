@@ -122,7 +122,7 @@ class TaskExecutor:
             # Create browser
             browser = Browser(
                 browser_profile=BrowserProfile(
-                    headless=False,
+                    headless=self.headless,
                 )
             )
 

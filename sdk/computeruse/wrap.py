@@ -20,12 +20,13 @@ import base64
 import inspect
 import json
 import logging
+import signal
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from computeruse.cost import calculate_cost_cents
 from computeruse.error_classifier import classify_error
@@ -33,6 +34,12 @@ from computeruse.models import ActionType, StepData
 from computeruse.replay_generator import ReplayGenerator
 from computeruse.retry_policy import should_retry_task
 from computeruse.stuck_detector import StuckDetector
+
+try:
+    from computeruse.budget import BudgetExceededError, BudgetMonitor
+except ImportError:  # budget.py not yet committed
+    BudgetMonitor = None  # type: ignore[assignment,misc]
+    BudgetExceededError = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger("observius")
 
@@ -68,6 +75,9 @@ class WrapConfig:
 
     # Task identification
     task_id: Optional[str] = None
+
+    # Budget enforcement
+    max_cost_cents: Optional[float] = None
 
     # API reporting (optional)
     api_url: Optional[str] = None
@@ -141,6 +151,40 @@ _ACTION_MAP: Dict[str, ActionType] = {
 
 
 # ---------------------------------------------------------------------------
+# Token extraction helper (multi-path for browser_use version compat)
+# ---------------------------------------------------------------------------
+
+
+def _extract_step_tokens(agent_step: Any) -> Tuple[int, int]:
+    """Extract input/output token counts from a browser_use history step.
+
+    Tries multiple attribute paths to handle different browser_use versions:
+    - ``metadata.input_tokens`` / ``metadata.output_tokens`` (< 0.12)
+    - ``metadata.tokens_in`` / ``metadata.tokens_out`` (0.12.x alternate)
+    - ``agent_step.input_tokens`` / ``agent_step.output_tokens`` (direct)
+
+    Returns:
+        ``(tokens_in, tokens_out)`` tuple, defaulting to ``(0, 0)``.
+    """
+    meta = getattr(agent_step, "metadata", None)
+    tokens_in = (
+        (getattr(meta, "input_tokens", 0) or 0) if meta else 0
+    ) or (
+        (getattr(meta, "tokens_in", 0) or 0) if meta else 0
+    ) or (
+        getattr(agent_step, "input_tokens", 0) or 0
+    )
+    tokens_out = (
+        (getattr(meta, "output_tokens", 0) or 0) if meta else 0
+    ) or (
+        (getattr(meta, "tokens_out", 0) or 0) if meta else 0
+    ) or (
+        getattr(agent_step, "output_tokens", 0) or 0
+    )
+    return int(tokens_in), int(tokens_out)
+
+
+# ---------------------------------------------------------------------------
 # WrappedAgent
 # ---------------------------------------------------------------------------
 
@@ -157,11 +201,18 @@ class WrappedAgent:
         self._task_id: str = config.task_id or str(uuid.uuid4())
         self._steps: List[StepData] = []
         self._cost_cents: float = 0.0
+        self._budget: Any = (
+            BudgetMonitor(max_cost_cents=config.max_cost_cents)
+            if BudgetMonitor is not None
+            else None
+        )
+        self._accumulated_cost: float = 0.0  # inline fallback when BudgetMonitor unavailable
         self._error_category: Optional[str] = None
         self._replay_path: Optional[str] = None
         self._created_at: datetime = datetime.now(timezone.utc)
         self._start_time: float = 0.0
         self._run_saved: bool = False
+        self._interrupted: bool = False
         self._analysis: Any = None  # RunAnalysis, set by _run_analysis()
 
         self._stuck_detector: Optional[StuckDetector] = None
@@ -208,14 +259,15 @@ class WrappedAgent:
 
         Feature-detects whether the underlying ``agent.run()`` accepts an
         ``on_step_end`` parameter (browser_use 0.11+).  If it does, real-time
-        stuck detection is wired in.  If not, the wrapper still works — stuck
-        analysis runs post-execution only.
+        stuck detection and budget enforcement are wired in.  If not, the
+        wrapper still works — analysis runs post-execution only.
 
         Returns the same object that ``agent.run()`` returns (typically an
         ``AgentHistoryList``).
         """
         self._start_time = time.monotonic()
         self._created_at = datetime.now(timezone.utc)
+        self._interrupted = False
         last_exception: Optional[Exception] = None
 
         # Ensure browser_use tracks token usage for cost calculation.
@@ -227,150 +279,180 @@ class WrappedAgent:
         except (AttributeError, TypeError):
             pass
 
-        for attempt in range(self._config.max_retries + 1):
-            try:
-                # -- Hook setup via inspect.signature ----------------------
-                #
-                # Check if agent.run() accepts on_step_end.  If yes, wire in
-                # our real-time stuck detection callback.  If the signature
-                # can't be inspected (e.g. C extension), skip gracefully.
+        # Install SIGINT handler for graceful interrupt.
+        # signal.signal() only works from the main thread; skip gracefully
+        # when called from worker threads (e.g. Celery, ThreadPoolExecutor).
+        import threading
+
+        _is_main_thread = threading.current_thread() is threading.main_thread()
+        original_handler = (
+            signal.getsignal(signal.SIGINT) if _is_main_thread else None
+        )
+
+        if _is_main_thread:
+
+            def _handle_sigint(signum: int, frame: Any) -> None:
+                self._interrupted = True
+                stop_fn = getattr(self._agent, "stop", None)
+                if callable(stop_fn):
+                    stop_fn()
+
+            signal.signal(signal.SIGINT, _handle_sigint)
+
+        try:
+            for attempt in range(self._config.max_retries + 1):
                 try:
-                    sig = inspect.signature(self._agent.run)
-                    if "on_step_end" in sig.parameters:
-                        run_kwargs.setdefault("on_step_end", self._on_step_end)
-                except (ValueError, TypeError):
-                    pass  # can't inspect — skip real-time hooks
+                    # -- Hook setup via inspect.signature ------------------
+                    try:
+                        sig = inspect.signature(self._agent.run)
+                        if "on_step_end" in sig.parameters:
+                            run_kwargs.setdefault(
+                                "on_step_end", self._on_step_end,
+                            )
+                    except (ValueError, TypeError):
+                        pass  # can't inspect — skip real-time hooks
 
-                # -- Run the agent -----------------------------------------
-                result = await self._agent.run(
-                    max_steps=max_steps, **run_kwargs
-                )
+                    # -- Run the agent -------------------------------------
+                    result = await self._agent.run(
+                        max_steps=max_steps, **run_kwargs
+                    )
 
-                # -- Post-run enrichment -----------------------------------
-                self._enrich_steps(result)
+                    # -- Post-run enrichment -------------------------------
+                    self._enrich_steps(result)
 
-                if self._config.track_cost:
-                    self._calculate_cost(result)
-                    if self._alert_emitter:
-                        self._alert_emitter.check_cost(
-                            self._task_id, self._cost_cents,
+                    if self._config.track_cost:
+                        self._calculate_cost(result)
+                        if self._alert_emitter:
+                            self._alert_emitter.check_cost(
+                                self._task_id, self._cost_cents,
+                            )
+
+                    if self._stuck_detector:
+                        self._stuck_detector.analyze_full_history(
+                            self._steps,
                         )
 
-                if self._stuck_detector:
-                    self._stuck_detector.analyze_full_history(self._steps)
+                    await self._run_analysis(status="completed")
+                    self._save_outputs()
+                    self._save_run_metadata(status="completed")
 
-                await self._run_analysis(status="completed")
-                self._save_outputs()
-                self._save_run_metadata(status="completed")
+                    if self._config.api_url and self._config.api_key:
+                        from computeruse._reporting import report_to_api
 
-                if self._config.api_url and self._config.api_key:
-                    from computeruse._reporting import report_to_api
+                        await report_to_api(
+                            api_url=self._config.api_url,
+                            api_key=self._config.api_key,
+                            task_id=self._task_id,
+                            task_description=getattr(
+                                self._agent, "task", ""
+                            ),
+                            status="completed",
+                            steps=self._steps,
+                            cost_cents=self._cost_cents,
+                            error_category=None,
+                            error_message=None,
+                            duration_ms=int(
+                                (time.monotonic() - self._start_time)
+                                * 1000
+                            ),
+                            created_at=self._created_at,
+                        )
 
-                    await report_to_api(
-                        api_url=self._config.api_url,
-                        api_key=self._config.api_key,
-                        task_id=self._task_id,
-                        task_description=getattr(
-                            self._agent, "task", ""
-                        ),
-                        status="completed",
-                        steps=self._steps,
-                        cost_cents=self._cost_cents,
-                        error_category=None,
-                        error_message=None,
-                        duration_ms=int(
-                            (time.monotonic() - self._start_time) * 1000
-                        ),
-                        created_at=self._created_at,
-                    )
+                    return result
 
-                return result
+                except Exception as exc:
+                    last_exception = exc
+                    classified = classify_error(exc)
+                    self._error_category = classified.category
 
-            except Exception as exc:
-                last_exception = exc
-                classified = classify_error(exc)
-                self._error_category = classified.category
-
-                decision = should_retry_task(
-                    classified.category,
-                    attempt,
-                    self._config.max_retries,
-                    retry_after_seconds=classified.retry_after_seconds,
-                )
-
-                if decision.should_retry:
-                    logger.warning(
-                        "Attempt %d/%d failed (%s), retrying in %ds",
-                        attempt + 1,
-                        self._config.max_retries + 1,
+                    decision = should_retry_task(
                         classified.category,
-                        decision.delay_seconds,
-                    )
-                    await asyncio.sleep(decision.delay_seconds)
-                    self._steps = []
-                    if self._stuck_detector:
-                        self._stuck_detector.reset()
-                    continue
-
-                if self._alert_emitter:
-                    self._alert_emitter.emit_failure(
-                        self._task_id, str(exc), classified.category,
+                        attempt,
+                        self._config.max_retries,
+                        retry_after_seconds=classified.retry_after_seconds,
                     )
 
-                await self._run_analysis(
-                    status="failed", error=str(exc),
+                    if decision.should_retry:
+                        logger.warning(
+                            "Attempt %d/%d failed (%s), retrying in %ds",
+                            attempt + 1,
+                            self._config.max_retries + 1,
+                            classified.category,
+                            decision.delay_seconds,
+                        )
+                        await asyncio.sleep(decision.delay_seconds)
+                        self._steps = []
+                        if BudgetMonitor is not None:
+                            self._budget = BudgetMonitor(
+                                max_cost_cents=self._config.max_cost_cents,
+                            )
+                        self._accumulated_cost = 0.0
+                        if self._stuck_detector:
+                            self._stuck_detector.reset()
+                        continue
+
+                    if self._alert_emitter:
+                        self._alert_emitter.emit_failure(
+                            self._task_id, str(exc), classified.category,
+                        )
+
+                    await self._run_analysis(
+                        status="failed", error=str(exc),
+                    )
+                    self._save_run_metadata(
+                        status="failed", error=str(exc),
+                    )
+                    if self._config.api_url and self._config.api_key:
+                        from computeruse._reporting import report_to_api
+
+                        await report_to_api(
+                            api_url=self._config.api_url,
+                            api_key=self._config.api_key,
+                            task_id=self._task_id,
+                            task_description=getattr(
+                                self._agent, "task", ""
+                            ),
+                            status="failed",
+                            steps=self._steps,
+                            cost_cents=self._cost_cents,
+                            error_category=self._error_category,
+                            error_message=str(exc),
+                            duration_ms=int(
+                                (time.monotonic() - self._start_time)
+                                * 1000
+                            ),
+                            created_at=self._created_at,
+                        )
+                    raise
+
+            # All retries exhausted — should not normally reach here
+            # because the last attempt either returns or raises, but
+            # guard defensively.
+            if last_exception:
+                self._save_run_metadata(
+                    status="failed", error=str(last_exception),
                 )
-                self._save_run_metadata(status="failed", error=str(exc))
-                if self._config.api_url and self._config.api_key:
-                    from computeruse._reporting import report_to_api
-
-                    await report_to_api(
-                        api_url=self._config.api_url,
-                        api_key=self._config.api_key,
-                        task_id=self._task_id,
-                        task_description=getattr(
-                            self._agent, "task", ""
-                        ),
-                        status="failed",
-                        steps=self._steps,
-                        cost_cents=self._cost_cents,
-                        error_category=self._error_category,
-                        error_message=str(exc),
-                        duration_ms=int(
-                            (time.monotonic() - self._start_time) * 1000
-                        ),
-                        created_at=self._created_at,
-                    )
-                raise
-
-            except BaseException:
-                # KeyboardInterrupt, SystemExit — save partial data
-                if self._steps and not self._run_saved:
-                    try:
-                        self._save_outputs()
-                        self._save_run_metadata(status="interrupted")
-                    except Exception:
-                        pass
-                raise
-
-        # All retries exhausted — should not normally reach here because the
-        # last attempt either returns or raises, but guard defensively.
-        if last_exception:
-            self._save_run_metadata(
-                status="failed", error=str(last_exception)
-            )
-            raise last_exception  # pragma: no cover
+                raise last_exception  # pragma: no cover
+        finally:
+            if _is_main_thread and original_handler is not None:
+                signal.signal(signal.SIGINT, original_handler)
+            if self._steps and not self._run_saved:
+                try:
+                    self._save_outputs()
+                    status = "interrupted" if self._interrupted else "failed"
+                    self._save_run_metadata(status=status)
+                except Exception:
+                    pass
 
     # -- Real-time hook ----------------------------------------------------
 
     async def _on_step_end(self, agent: Any) -> None:
         """Async callback invoked after each browser_use step.
 
-        Performs real-time stuck detection.  If a stuck pattern is detected,
-        calls ``agent.stop()`` to terminate the run early.
+        Performs real-time stuck detection and budget enforcement.
+        If a stuck pattern or budget overrun is detected, calls
+        ``agent.stop()`` to terminate the run early.
         """
-        if not self._stuck_detector:
-            return
         try:
             history = getattr(agent, "history", None)
             if not history:
@@ -378,23 +460,57 @@ class WrappedAgent:
             latest = history[-1] if isinstance(history, list) else None
             if latest is None:
                 return
-            signal = self._stuck_detector.check_agent_step(latest)
-            if signal.detected:
-                logger.warning(
-                    "Stuck agent detected: reason=%s step=%d details=%s",
-                    signal.reason,
-                    signal.step_number,
-                    signal.details,
-                )
-                if self._alert_emitter:
-                    self._alert_emitter.emit_stuck(
-                        self._task_id, signal.reason,
+
+            # Stuck detection
+            if self._stuck_detector:
+                stuck_signal = self._stuck_detector.check_agent_step(latest)
+                if stuck_signal.detected:
+                    logger.warning(
+                        "Stuck agent detected: reason=%s step=%d details=%s",
+                        stuck_signal.reason,
+                        stuck_signal.step_number,
+                        stuck_signal.details,
                     )
-                stop_fn = getattr(agent, "stop", None)
-                if callable(stop_fn):
-                    stop_fn()
+                    if self._alert_emitter:
+                        self._alert_emitter.emit_stuck(
+                            self._task_id, stuck_signal.reason,
+                        )
+                    stop_fn = getattr(agent, "stop", None)
+                    if callable(stop_fn):
+                        stop_fn()
+                    return
+
+            # Budget enforcement
+            if self._config.max_cost_cents is not None:
+                tokens_in, tokens_out = _extract_step_tokens(latest)
+                if tokens_in or tokens_out:
+                    if self._budget is not None:
+                        try:
+                            self._budget.record_step_cost(tokens_in, tokens_out)
+                        except BudgetExceededError:
+                            logger.warning(
+                                "Budget exceeded: %.2f¢ > %.2f¢. Stopping.",
+                                self._budget.total_cost_cents,
+                                self._config.max_cost_cents,
+                            )
+                            stop_fn = getattr(agent, "stop", None)
+                            if callable(stop_fn):
+                                stop_fn()
+                    else:
+                        # Inline fallback when budget.py unavailable
+                        step_cost = calculate_cost_cents(tokens_in, tokens_out)
+                        self._accumulated_cost += step_cost
+                        if self._accumulated_cost > self._config.max_cost_cents:
+                            logger.warning(
+                                "Budget exceeded: %.2f¢ > %.2f¢. Stopping.",
+                                self._accumulated_cost,
+                                self._config.max_cost_cents,
+                            )
+                            stop_fn = getattr(agent, "stop", None)
+                            if callable(stop_fn):
+                                stop_fn()
         except Exception as exc:
-            logger.debug("on_step_end stuck check failed: %s", exc)
+            logger.debug("on_step_end check failed: %s", exc)
 
     # -- Analysis ----------------------------------------------------------
 
@@ -513,13 +629,14 @@ class WrappedAgent:
                     if parts:
                         step.description = " | ".join(parts)[:500]
 
-                # Token counts from metadata (browser_use <6.0)
+                # Token counts (multi-path for browser_use version compat)
+                step.tokens_in, step.tokens_out = _extract_step_tokens(
+                    agent_step,
+                )
+
+                # Duration from metadata
                 meta = getattr(agent_step, "metadata", None)
                 if meta:
-                    step.tokens_in = getattr(meta, "input_tokens", 0) or 0
-                    step.tokens_out = getattr(meta, "output_tokens", 0) or 0
-                    # Duration: 6.0 uses duration_seconds property,
-                    # older versions use step_duration attribute.
                     dur = getattr(meta, "duration_seconds", None)
                     if dur is None:
                         dur = getattr(meta, "step_duration", None)
@@ -527,6 +644,27 @@ class WrappedAgent:
                         step.duration_ms = int(dur * 1000)
 
                 self._steps.append(step)
+
+            # Second pass: enrich intent and selectors from model_output
+            for enriched_step, raw_step in zip(self._steps, history):
+                mo = getattr(raw_step, "model_output", None)
+                if mo is None:
+                    continue
+                # Intent from LLM reasoning (next_goal)
+                reasoning = getattr(mo, "next_goal", "")
+                if reasoning and not enriched_step.intent:
+                    enriched_step.intent = str(reasoning)[:200]
+                # Selectors from action objects
+                actions = getattr(mo, "action", [])
+                if not isinstance(actions, list):
+                    actions = [actions] if actions else []
+                for action in actions:
+                    selector = getattr(action, "selector", None)
+                    if selector and not enriched_step.selectors:
+                        enriched_step.selectors = [
+                            {"type": "css", "value": selector, "confidence": 0.8},
+                        ]
+                        break
 
             # browser_use 6.0+: per-step metadata has no token counts.
             # Distribute total tokens from result.usage evenly across steps.
@@ -536,9 +674,17 @@ class WrappedAgent:
             if not has_step_tokens and self._steps:
                 usage = getattr(result, "usage", None)
                 if usage:
-                    total_in = getattr(usage, "total_prompt_tokens", 0) or 0
+                    total_in = (
+                        getattr(usage, "total_prompt_tokens", 0)
+                        or getattr(usage, "prompt_tokens", 0)
+                        or getattr(usage, "input_tokens", 0)
+                        or 0
+                    )
                     total_out = (
-                        getattr(usage, "total_completion_tokens", 0) or 0
+                        getattr(usage, "total_completion_tokens", 0)
+                        or getattr(usage, "completion_tokens", 0)
+                        or getattr(usage, "output_tokens", 0)
+                        or 0
                     )
                     if total_in or total_out:
                         n = len(self._steps)
@@ -661,16 +807,7 @@ class WrappedAgent:
                 (time.monotonic() - self._start_time) * 1000
             ),
             "steps": [
-                {
-                    "action_type": s.action_type,
-                    "description": s.description,
-                    "duration_ms": s.duration_ms,
-                    "success": s.success,
-                    "tokens_in": s.tokens_in,
-                    "tokens_out": s.tokens_out,
-                    "screenshot_path": s.screenshot_path,
-                }
-                for s in self._steps
+                self._serialize_step(s) for s in self._steps
             ],
             "analysis": {
                 "summary": self._analysis.summary,
@@ -695,6 +832,34 @@ class WrappedAgent:
             path.write_text(json.dumps(metadata, indent=2, default=str))
         except Exception as exc:
             logger.warning("Failed to save run metadata: %s", exc)
+
+    @staticmethod
+    def _serialize_step(s: StepData) -> Dict[str, Any]:
+        """Serialize a step for JSON metadata output."""
+        data: Dict[str, Any] = {
+            "action_type": s.action_type,
+            "description": s.description,
+            "duration_ms": s.duration_ms,
+            "success": s.success,
+            "tokens_in": s.tokens_in,
+            "tokens_out": s.tokens_out,
+            "screenshot_path": s.screenshot_path,
+        }
+        # Enrichment fields (populated when step_enrichment is active)
+        for attr in (
+            "selectors", "intent", "intent_detail",
+            "pre_url", "post_url",
+            "pre_dom_hash", "post_dom_hash",
+            "expected_url_pattern", "expected_element", "expected_text",
+            "fill_value_template",
+            "element_text", "element_tag", "element_role",
+            "verification_result",
+            "window_title", "control_type", "control_name",
+        ):
+            val = getattr(s, attr, None)
+            if val:
+                data[attr] = val
+        return data
 
     # -- Session helpers (best-effort) -------------------------------------
 

@@ -26,12 +26,17 @@ class TestActionType:
             "inject_credentials", "solve_captcha", "unknown",
             "mouse_move", "key_press", "double_click", "right_click",
             "middle_click", "screenshot", "drag", "triple_click", "zoom",
+            "act", "observe", "state_snapshot", "llm_call", "api_call",
+            "file_open", "file_save", "menu_select", "window_switch",
+            "desktop_click", "desktop_type", "desktop_scroll",
+            "desktop_drag", "desktop_hotkey", "desktop_launch",
+            "desktop_focus",
         }
         actual = {m.value for m in ActionType}
         assert actual == expected
 
     def test_count(self) -> None:
-        assert len(ActionType) == 18
+        assert len(ActionType) == 34
 
     def test_string_comparison(self) -> None:
         assert ActionType.NAVIGATE == "navigate"

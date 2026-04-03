@@ -5,9 +5,10 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import TYPE_CHECKING, List
 
-from playwright.async_api import Page
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 from computeruse.exceptions import SessionError
 

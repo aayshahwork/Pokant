@@ -363,6 +363,74 @@ class StepData(BaseModel):
         description="Arbitrary debug context (LLM traces, API responses, state snapshots)",
     )
 
+    # -- Explore-to-replay enrichment fields ----------------------------------
+    selectors: Optional[List[Dict]] = Field(
+        default=None,
+        description="Multiple selector strategies for the acted-on element",
+    )
+    intent: str = Field(default="", description="Inferred intent of this step")
+    intent_detail: str = Field(default="", description="Detailed intent description")
+    pre_url: str = Field(default="", description="Page URL before the action")
+    post_url: str = Field(default="", description="Page URL after the action")
+    pre_dom_hash: str = Field(default="", description="DOM fingerprint hash before action")
+    post_dom_hash: str = Field(default="", description="DOM fingerprint hash after action")
+    expected_url_pattern: str = Field(
+        default="", description="Regex pattern the post-action URL should match",
+    )
+    expected_element: str = Field(
+        default="", description="CSS selector expected to appear after action",
+    )
+    expected_text: str = Field(
+        default="", description="Text expected on page after action",
+    )
+    fill_value_template: str = Field(
+        default="", description="Parameterized template for fill values (e.g. {{email}})",
+    )
+    element_text: str = Field(default="", description="innerText of the acted-on element")
+    element_tag: str = Field(default="", description="HTML tag of the acted-on element")
+    element_role: str = Field(default="", description="ARIA role of the acted-on element")
+    verification_result: Optional[Dict] = Field(
+        default=None, description="Post-action verification outcome",
+    )
+    window_title: str = Field(default="", description="Desktop window title (desktop automation)")
+    control_type: str = Field(default="", description="Desktop control type (desktop automation)")
+    control_name: str = Field(default="", description="Desktop control name (desktop automation)")
+
+
+# ---------------------------------------------------------------------------
+# Compiled workflow models (explore-to-replay)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CompiledStep:
+    """A single step in a compiled, replayable workflow."""
+
+    action_type: str
+    selectors: List[Dict] = field(default_factory=list)
+    fill_value_template: str = ""
+    expected_url_pattern: str = ""
+    expected_element: str = ""
+    expected_text: str = ""
+    intent: str = ""
+    timeout_ms: int = 30000
+    pre_url: str = ""
+    window_title: str = ""
+    control_type: str = ""
+    control_name: str = ""
+
+
+@dataclass(frozen=True)
+class CompiledWorkflow:
+    """A compiled workflow ready for deterministic replay."""
+
+    name: str
+    steps: List[CompiledStep] = field(default_factory=list)
+    start_url: str = ""
+    parameters: Dict[str, str] = field(default_factory=dict)
+    source_task_id: str = ""
+    compiled_at: str = ""
+
 
 class SessionData(BaseModel):
     """Persisted browser session state for a given domain.

@@ -82,14 +82,48 @@ class TrackedPage:
             if self._config.retry_navigations
             else 1
         )
+        pre_url = await self._safe_get_url()
+
         for attempt in range(max_attempts):
             start = time.monotonic()
             try:
                 result = await self._page.goto(url, **kwargs)
                 duration = int((time.monotonic() - start) * 1000)
+                post_url = await self._safe_get_url()
                 screenshot = await self._safe_screenshot()
+
+                # Enrichment: outcomes + verification
+                outcomes: dict = {}
+                verification = None
+                try:
+                    from computeruse.step_enrichment import infer_expected_outcomes
+                    outcomes = await infer_expected_outcomes(
+                        self._page, "navigate", pre_url,
+                    )
+                except Exception:
+                    pass
+                try:
+                    from computeruse.action_verifier import ActionVerifier
+                    verification = await ActionVerifier().verify_action(
+                        self._page, "navigate",
+                        expected_url_pattern=outcomes.get("url_pattern", ""),
+                        expected_text=outcomes.get("expected_text", ""),
+                        pre_url=pre_url,
+                    )
+                except Exception:
+                    pass
+
                 self._record_step(
                     ActionType.NAVIGATE, f"goto({url})", duration, True, screenshot,
+                    pre_url=pre_url,
+                    post_url=post_url,
+                    intent=f"Navigate to {url}",
+                    intent_detail=f"Open {url}",
+                    expected_url_pattern=outcomes.get("url_pattern", ""),
+                    expected_text=outcomes.get("expected_text", ""),
+                    verification_result=(
+                        verification.__dict__ if verification else None
+                    ),
                 )
                 return result
             except Exception as exc:
@@ -109,6 +143,7 @@ class TrackedPage:
                 self._record_step(
                     ActionType.NAVIGATE, f"goto({url})", duration, False,
                     screenshot, str(exc),
+                    pre_url=pre_url,
                 )
                 if self._alert_emitter:
                     self._alert_emitter.emit_failure(
@@ -117,22 +152,195 @@ class TrackedPage:
                 raise
 
     async def click(self, selector: str, **kwargs: Any) -> Any:
-        return await self._tracked_action(
-            ActionType.CLICK, f"click({selector})",
-            self._page.click, selector, **kwargs,
-        )
+        """Click an element with enrichment capture."""
+        pre_url = await self._safe_get_url()
+
+        # Extract selectors and metadata BEFORE action (element exists now)
+        selectors: list = []
+        element_meta: dict = {}
+        try:
+            from computeruse.step_enrichment import (
+                extract_element_metadata,
+                extract_selectors,
+            )
+            selectors = await extract_selectors(self._page, selector)
+            element_meta = await extract_element_metadata(self._page, selector)
+        except Exception:
+            pass
+
+        start = time.monotonic()
+        try:
+            result = await self._page.click(selector, **kwargs)
+            duration = int((time.monotonic() - start) * 1000)
+            post_url = await self._safe_get_url()
+            screenshot = await self._safe_screenshot()
+
+            intent, intent_detail = "", ""
+            outcomes: dict = {}
+            try:
+                from computeruse.step_enrichment import (
+                    infer_expected_outcomes,
+                    infer_intent_from_step,
+                )
+                intent, intent_detail = infer_intent_from_step("click", element_meta)
+                outcomes = await infer_expected_outcomes(
+                    self._page, "click", pre_url,
+                )
+            except Exception:
+                pass
+
+            verification = None
+            try:
+                from computeruse.action_verifier import ActionVerifier
+                verification = await ActionVerifier().verify_action(
+                    self._page, "click",
+                    expected_url_pattern=outcomes.get("url_pattern", ""),
+                    expected_element=outcomes.get("expected_element", ""),
+                    pre_url=pre_url,
+                )
+            except Exception:
+                pass
+
+            self._record_step(
+                ActionType.CLICK, f"click({selector})", duration, True, screenshot,
+                selectors=selectors,
+                intent=intent,
+                intent_detail=intent_detail,
+                pre_url=pre_url,
+                post_url=post_url,
+                expected_url_pattern=outcomes.get("url_pattern", ""),
+                expected_element=outcomes.get("expected_element", ""),
+                element_text=element_meta.get("text", ""),
+                element_tag=element_meta.get("tag", ""),
+                element_role=element_meta.get("role", ""),
+                verification_result=(
+                    verification.__dict__ if verification else None
+                ),
+            )
+            return result
+        except Exception as exc:
+            duration = int((time.monotonic() - start) * 1000)
+            screenshot = await self._safe_screenshot()
+            self._record_step(
+                ActionType.CLICK, f"click({selector})", duration, False,
+                screenshot, str(exc),
+                pre_url=pre_url,
+                selectors=selectors,
+                element_text=element_meta.get("text", ""),
+                element_tag=element_meta.get("tag", ""),
+                element_role=element_meta.get("role", ""),
+            )
+            if self._alert_emitter:
+                classified = classify_error(exc)
+                self._alert_emitter.emit_failure(
+                    self._run_id, str(exc), classified.category,
+                )
+            raise
 
     async def fill(self, selector: str, value: str, **kwargs: Any) -> Any:
-        return await self._tracked_action(
-            ActionType.TYPE, f"fill({selector})",
-            self._page.fill, selector, value, **kwargs,
-        )
+        """Fill a form field with enrichment and value parameterization."""
+        pre_url = await self._safe_get_url()
+
+        selectors: list = []
+        element_meta: dict = {}
+        try:
+            from computeruse.step_enrichment import (
+                extract_element_metadata,
+                extract_selectors,
+            )
+            selectors = await extract_selectors(self._page, selector)
+            element_meta = await extract_element_metadata(self._page, selector)
+        except Exception:
+            pass
+
+        fill_template = ""
+        try:
+            from computeruse.step_enrichment import detect_parameterizable_values
+            fill_template = detect_parameterizable_values(value)
+        except Exception:
+            pass
+
+        start = time.monotonic()
+        try:
+            result = await self._page.fill(selector, value, **kwargs)
+            duration = int((time.monotonic() - start) * 1000)
+            post_url = await self._safe_get_url()
+            screenshot = await self._safe_screenshot()
+
+            intent, intent_detail = "", ""
+            try:
+                from computeruse.step_enrichment import infer_intent_from_step
+                intent, intent_detail = infer_intent_from_step("fill", element_meta)
+            except Exception:
+                pass
+
+            self._record_step(
+                ActionType.TYPE, f"fill({selector})", duration, True, screenshot,
+                selectors=selectors,
+                intent=intent,
+                intent_detail=intent_detail,
+                pre_url=pre_url,
+                post_url=post_url,
+                fill_value_template=fill_template,
+                element_text=element_meta.get("text", ""),
+                element_tag=element_meta.get("tag", ""),
+                element_role=element_meta.get("role", ""),
+            )
+            return result
+        except Exception as exc:
+            duration = int((time.monotonic() - start) * 1000)
+            screenshot = await self._safe_screenshot()
+            self._record_step(
+                ActionType.TYPE, f"fill({selector})", duration, False,
+                screenshot, str(exc),
+                pre_url=pre_url,
+                selectors=selectors,
+            )
+            if self._alert_emitter:
+                classified = classify_error(exc)
+                self._alert_emitter.emit_failure(
+                    self._run_id, str(exc), classified.category,
+                )
+            raise
 
     async def type(self, selector: str, text: str, **kwargs: Any) -> Any:
-        return await self._tracked_action(
-            ActionType.TYPE, f"type({selector})",
-            self._page.type, selector, text, **kwargs,
-        )
+        """Type text into a field with value parameterization."""
+        pre_url = await self._safe_get_url()
+
+        fill_template = ""
+        try:
+            from computeruse.step_enrichment import detect_parameterizable_values
+            fill_template = detect_parameterizable_values(text)
+        except Exception:
+            pass
+
+        start = time.monotonic()
+        try:
+            result = await self._page.type(selector, text, **kwargs)
+            duration = int((time.monotonic() - start) * 1000)
+            post_url = await self._safe_get_url()
+            screenshot = await self._safe_screenshot()
+            self._record_step(
+                ActionType.TYPE, f"type({selector})", duration, True, screenshot,
+                pre_url=pre_url,
+                post_url=post_url,
+                fill_value_template=fill_template,
+            )
+            return result
+        except Exception as exc:
+            duration = int((time.monotonic() - start) * 1000)
+            screenshot = await self._safe_screenshot()
+            self._record_step(
+                ActionType.TYPE, f"type({selector})", duration, False,
+                screenshot, str(exc),
+                pre_url=pre_url,
+            )
+            if self._alert_emitter:
+                classified = classify_error(exc)
+                self._alert_emitter.emit_failure(
+                    self._run_id, str(exc), classified.category,
+                )
+            raise
 
     async def select_option(self, selector: str, **kwargs: Any) -> Any:
         return await self._tracked_action(
@@ -201,18 +409,24 @@ class TrackedPage:
         **kwargs: Any,
     ) -> Any:
         """Generic wrapper for tracked page methods."""
+        pre_url = await self._safe_get_url()
         start = time.monotonic()
         try:
             result = await method(*args, **kwargs)
             duration = int((time.monotonic() - start) * 1000)
+            post_url = await self._safe_get_url()
             screenshot = await self._safe_screenshot()
-            self._record_step(action_type, description, duration, True, screenshot)
+            self._record_step(
+                action_type, description, duration, True, screenshot,
+                pre_url=pre_url, post_url=post_url,
+            )
             return result
         except Exception as exc:
             duration = int((time.monotonic() - start) * 1000)
             screenshot = await self._safe_screenshot()
             self._record_step(
                 action_type, description, duration, False, screenshot, str(exc),
+                pre_url=pre_url,
             )
             if self._alert_emitter:
                 classified = classify_error(exc)
@@ -229,8 +443,13 @@ class TrackedPage:
         success: bool,
         screenshot_bytes: Optional[bytes] = None,
         error: Optional[str] = None,
+        **kwargs: Any,
     ) -> None:
         self._step_counter += 1
+        enrichment = {
+            k: v for k, v in kwargs.items()
+            if v is not None and v != "" and v != []
+        }
         step = StepData(
             step_number=self._step_counter,
             action_type=action_type,
@@ -240,8 +459,16 @@ class TrackedPage:
             error=error,
             timestamp=datetime.now(timezone.utc),
             screenshot_bytes=screenshot_bytes,
+            **enrichment,
         )
         self._steps.append(step)
+
+    async def _safe_get_url(self) -> str:
+        """Get current page URL without raising."""
+        try:
+            return self._page.url if hasattr(self._page, "url") else ""
+        except Exception:
+            return ""
 
     async def _safe_screenshot(self) -> Optional[bytes]:
         """Take a screenshot, never raising even if the page is closed."""

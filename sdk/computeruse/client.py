@@ -17,14 +17,14 @@ from computeruse.exceptions import (
     NetworkError,
     TaskExecutionError,
 )
-from computeruse.executor import TaskExecutor
 from computeruse.models import TaskConfig, TaskResult
 from computeruse.retry import RetryHandler
 
 logger = logging.getLogger(__name__)
 
 # Directory where completed TaskResult objects are cached as JSON files.
-_TASK_STORE = Path(".tasks")
+# Stored under .observius/ to match the SDK's standard data directory.
+_TASK_STORE = Path(".observius") / "tasks"
 
 # Hosted cloud API base URL.
 _CLOUD_API_BASE = "https://api.computeruse.dev/v1"
@@ -200,10 +200,15 @@ class ComputerUse:
             ComputerUseSDKError: If the cloud API returns 404.
         """
         if self.local:
-            path = Path.home() / ".computeruse" / "replays" / f"{task_id}.html"
-            if not path.exists():
-                raise FileNotFoundError(f"No replay found at {path}")
-            return str(path)
+            replay_dir = Path(settings.REPLAY_DIR)
+            # Check both JSON and HTML replay formats
+            for suffix in (".html", ".json"):
+                path = replay_dir / f"{task_id}{suffix}"
+                if path.exists():
+                    return str(path)
+            raise FileNotFoundError(
+                f"No replay found for task {task_id!r} in {replay_dir}"
+            )
 
         return _run_sync(self._fetch_cloud_replay(task_id))
 
@@ -322,6 +327,8 @@ class ComputerUse:
         A new executor is created on every call so that per-run state
         is always clean, making concurrent ``run_task`` calls safe.
         """
+        from computeruse.executor import TaskExecutor
+
         executor = TaskExecutor(
             model=self.model,
             headless=self.headless,

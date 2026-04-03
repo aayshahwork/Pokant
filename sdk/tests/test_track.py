@@ -63,6 +63,14 @@ class MockPage:
     async def evaluate(self, script, *args):
         return {}
 
+    async def eval_on_selector(self, selector, script):
+        """Minimal stub for enrichment functions."""
+        return {"text": "Submit", "tag": "button", "role": "button",
+                "aria_label": "", "placeholder": "", "name": "", "type": "submit"}
+
+    async def content(self):
+        return "<html><body>Example Page</body></html>"
+
 
 # ---------------------------------------------------------------------------
 # Context manager basics
@@ -965,9 +973,10 @@ class TestRunIdGeneration:
         async with track(page, config=config) as t:
             pass
 
-        # Should be a 12-char hex string
-        assert len(t._run_id) == 12
-        int(t._run_id, 16)  # should not raise
+        # Should be a UUID4 string (36 chars with hyphens)
+        assert len(t._run_id) == 36
+        import uuid
+        uuid.UUID(t._run_id)  # should not raise
 
     async def test_custom_task_id_used_as_run_id(self, tmp_path):
         page = MockPage()
@@ -1286,3 +1295,86 @@ class TestApiReporting:
         # Steps and metadata should still be saved
         assert len(t.steps) == 1
         assert (tmp_path / ".observius" / "runs" / "report-false.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# Tests: Step enrichment integration
+# ---------------------------------------------------------------------------
+
+
+class TestTrackEnrichment:
+    """Verify that enrichment fields are populated on tracked steps."""
+
+    async def test_click_has_enrichment_fields(self, tmp_path):
+        page = MockPage()
+        config = TrackConfig(output_dir=str(tmp_path / ".observius"))
+        async with track(page, config=config) as t:
+            await t.click("#submit-btn")
+
+        step = t.steps[0]
+        assert step.pre_url == "https://example.com"
+        assert step.post_url == "https://example.com"
+        # Selectors populated from enrichment (eval_on_selector stub)
+        assert step.selectors is not None
+        assert len(step.selectors) >= 1
+        assert step.selectors[0]["type"] == "css"
+        # Intent inferred from element metadata
+        assert step.intent != ""
+        assert step.element_tag == "button"
+
+    async def test_fill_has_parameterized_template(self, tmp_path):
+        page = MockPage()
+        config = TrackConfig(output_dir=str(tmp_path / ".observius"))
+        async with track(page, config=config) as t:
+            await t.fill("#email", "user@example.com")
+
+        step = t.steps[0]
+        assert step.fill_value_template == "{{email}}"
+
+    async def test_type_has_parameterized_template(self, tmp_path):
+        page = MockPage()
+        config = TrackConfig(output_dir=str(tmp_path / ".observius"))
+        async with track(page, config=config) as t:
+            await t.type("#phone", "555-867-5309")
+
+        step = t.steps[0]
+        assert step.fill_value_template == "{{phone}}"
+
+    async def test_goto_has_pre_post_url(self, tmp_path):
+        page = MockPage()
+        config = TrackConfig(output_dir=str(tmp_path / ".observius"))
+        async with track(page, config=config) as t:
+            await t.goto("https://example.com/page")
+
+        step = t.steps[0]
+        assert step.pre_url == "https://example.com"
+        assert step.intent != ""
+
+    async def test_select_option_has_pre_post_url(self, tmp_path):
+        page = MockPage()
+        config = TrackConfig(output_dir=str(tmp_path / ".observius"))
+        async with track(page, config=config) as t:
+            await t.select_option("#dropdown")
+
+        step = t.steps[0]
+        assert step.pre_url == "https://example.com"
+        assert step.post_url == "https://example.com"
+
+    async def test_enrichment_failure_does_not_break_tracking(self, tmp_path):
+        """If enrichment functions crash, step is still recorded."""
+        page = MockPage()
+        # Remove eval_on_selector to force enrichment failure
+        delattr(MockPage, "eval_on_selector")
+        config = TrackConfig(output_dir=str(tmp_path / ".observius"))
+        try:
+            async with track(page, config=config) as t:
+                await t.click("#btn")
+            assert len(t.steps) == 1
+            assert t.steps[0].success is True
+        finally:
+            # Restore for other tests
+            async def _stub(self, selector, script):
+                return {"text": "Submit", "tag": "button", "role": "button",
+                        "aria_label": "", "placeholder": "", "name": "",
+                        "type": "submit"}
+            MockPage.eval_on_selector = _stub

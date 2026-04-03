@@ -11,7 +11,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from computeruse.models import ActionType
-from computeruse.wrap import WrappedAgent, WrapConfig, _ACTION_MAP, wrap
+from computeruse.wrap import (
+    WrappedAgent,
+    WrapConfig,
+    _ACTION_MAP,
+    _extract_step_tokens,
+    wrap,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -680,7 +686,7 @@ class TestPropertiesLifecycle:
         async def _run() -> None:
             await wrapped.run()
 
-        asyncio.get_event_loop().run_until_complete(_run())
+        asyncio.run(_run())
 
         external = wrapped.steps
         external.clear()
@@ -1330,6 +1336,7 @@ class TestRunMetadataEdgeCases:
             "completed_at",
             "duration_ms",
             "steps",
+            "analysis",
         }
         assert set(data.keys()) == expected_keys
 
@@ -1763,3 +1770,316 @@ class TestApiReporting:
             run_result = await wrapped.run()
 
         assert run_result is result
+
+
+# ---------------------------------------------------------------------------
+# Tests: _extract_step_tokens multi-path extraction
+# ---------------------------------------------------------------------------
+
+
+class TestExtractStepTokens:
+    def test_primary_path_input_output_tokens(self) -> None:
+        """Standard path: metadata.input_tokens / metadata.output_tokens."""
+        step = SimpleNamespace(
+            metadata=SimpleNamespace(input_tokens=100, output_tokens=50),
+        )
+        assert _extract_step_tokens(step) == (100, 50)
+
+    def test_alternate_path_tokens_in_out(self) -> None:
+        """Alternate path: metadata.tokens_in / metadata.tokens_out."""
+        step = SimpleNamespace(
+            metadata=SimpleNamespace(tokens_in=200, tokens_out=80),
+        )
+        assert _extract_step_tokens(step) == (200, 80)
+
+    def test_direct_step_attributes(self) -> None:
+        """Direct path: step.input_tokens / step.output_tokens."""
+        step = SimpleNamespace(input_tokens=300, output_tokens=120)
+        assert _extract_step_tokens(step) == (300, 120)
+
+    def test_no_tokens_returns_zero(self) -> None:
+        """No token attributes anywhere returns (0, 0)."""
+        step = SimpleNamespace()
+        assert _extract_step_tokens(step) == (0, 0)
+
+    def test_none_metadata_falls_through(self) -> None:
+        """metadata=None falls through to direct attributes."""
+        step = SimpleNamespace(
+            metadata=None, input_tokens=150, output_tokens=60,
+        )
+        assert _extract_step_tokens(step) == (150, 60)
+
+
+# ---------------------------------------------------------------------------
+# Tests: cost from alternate token paths (Bug 1 verification)
+# ---------------------------------------------------------------------------
+
+
+class TestCostAlternateTokenPaths:
+    async def test_cost_from_alternate_metadata_tokens(self) -> None:
+        """tokens_in/tokens_out on metadata still produces cost > 0."""
+        meta = SimpleNamespace(tokens_in=1000, tokens_out=500)
+        history_step = SimpleNamespace(
+            result=[SimpleNamespace(error=None)],
+            model_output=SimpleNamespace(
+                action=[SimpleNamespace()],
+                next_goal="Do something",
+                evaluation_previous_goal=None,
+            ),
+            metadata=meta,
+            state=SimpleNamespace(screenshot=None),
+        )
+        result = _make_result(
+            steps=[history_step],
+            action_names=["ClickElementAction"],
+            total_cost_dollars=None,
+        )
+        agent = MockAgent(result=result)
+        wrapped = wrap(agent, output_dir="/tmp/observius_test_alt_tokens")
+        await wrapped.run()
+        assert wrapped.cost_cents > 0
+        assert wrapped.steps[0].tokens_in == 1000
+        assert wrapped.steps[0].tokens_out == 500
+
+    async def test_cost_from_direct_step_tokens(self) -> None:
+        """Tokens directly on step object still produce cost > 0."""
+        history_step = SimpleNamespace(
+            result=[SimpleNamespace(error=None)],
+            model_output=SimpleNamespace(
+                action=[SimpleNamespace()],
+                next_goal="Do something",
+                evaluation_previous_goal=None,
+            ),
+            metadata=None,
+            state=SimpleNamespace(screenshot=None),
+            input_tokens=2000,
+            output_tokens=800,
+        )
+        result = _make_result(
+            steps=[history_step],
+            action_names=["ClickElementAction"],
+            total_cost_dollars=None,
+        )
+        agent = MockAgent(result=result)
+        wrapped = wrap(agent, output_dir="/tmp/observius_test_direct_tokens")
+        await wrapped.run()
+        assert wrapped.cost_cents > 0
+        assert wrapped.steps[0].tokens_in == 2000
+        assert wrapped.steps[0].tokens_out == 800
+
+
+# ---------------------------------------------------------------------------
+# Tests: max_cost_cents budget enforcement (Bug 2)
+# ---------------------------------------------------------------------------
+
+
+class TestBudgetEnforcement:
+    def test_max_cost_cents_default_none(self) -> None:
+        cfg = WrapConfig()
+        assert cfg.max_cost_cents is None
+
+    def test_max_cost_cents_set(self) -> None:
+        cfg = WrapConfig(max_cost_cents=5.0)
+        assert cfg.max_cost_cents == 5.0
+
+    async def test_budget_exceeded_stops_agent(self) -> None:
+        """When accumulated cost > max_cost_cents, agent.stop() is called."""
+        agent = MockAgent(result=_make_result())
+        wrapped = wrap(agent, max_cost_cents=0.001, output_dir="/tmp/observius_test_budget")
+
+        # Simulate a step with enough tokens to exceed the tiny budget
+        expensive_step = SimpleNamespace(
+            metadata=SimpleNamespace(input_tokens=100000, output_tokens=50000),
+        )
+        mock_agent = SimpleNamespace(
+            history=[expensive_step],
+            stop=MagicMock(),
+        )
+        await wrapped._on_step_end(mock_agent)
+        mock_agent.stop.assert_called_once()
+
+    async def test_budget_not_exceeded_no_stop(self) -> None:
+        """When accumulated cost < max_cost_cents, agent continues."""
+        agent = MockAgent(result=_make_result())
+        wrapped = wrap(agent, max_cost_cents=100.0, output_dir="/tmp/observius_test_budget_ok")
+
+        cheap_step = SimpleNamespace(
+            metadata=SimpleNamespace(input_tokens=10, output_tokens=5),
+        )
+        mock_agent = SimpleNamespace(
+            history=[cheap_step],
+            stop=MagicMock(),
+        )
+        await wrapped._on_step_end(mock_agent)
+        mock_agent.stop.assert_not_called()
+
+    async def test_budget_none_no_enforcement(self) -> None:
+        """When max_cost_cents is None, no budget check happens."""
+        agent = MockAgent(result=_make_result())
+        wrapped = wrap(agent, output_dir="/tmp/observius_test_no_budget")
+
+        expensive_step = SimpleNamespace(
+            metadata=SimpleNamespace(input_tokens=999999, output_tokens=999999),
+        )
+        mock_agent = SimpleNamespace(
+            history=[expensive_step],
+            stop=MagicMock(),
+        )
+        await wrapped._on_step_end(mock_agent)
+        mock_agent.stop.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests: interrupt safety (Bug 3)
+# ---------------------------------------------------------------------------
+
+
+class TestInterruptSafety:
+    async def test_finally_saves_metadata_on_error(
+        self, tmp_path: Path,
+    ) -> None:
+        """On unhandled exception, finally block saves partial metadata."""
+        agent = MockAgent(error=_make_permanent_error("crash"))
+        wrapped = wrap(
+            agent,
+            task_id="test-interrupt",
+            max_retries=0,
+            output_dir=str(tmp_path),
+        )
+        with pytest.raises(Exception):
+            await wrapped.run()
+
+        meta_path = tmp_path / "runs" / "test-interrupt.json"
+        assert meta_path.exists()
+        data = json.loads(meta_path.read_text())
+        assert data["status"] == "failed"
+
+    async def test_interrupted_flag_initially_false(self) -> None:
+        agent = MockAgent(result=_make_result())
+        wrapped = wrap(agent, output_dir="/tmp/observius_test_flag")
+        assert wrapped._interrupted is False
+
+    async def test_budget_resets_on_retry(self) -> None:
+        """BudgetMonitor and inline fallback reset between retry attempts."""
+        result = _make_result()
+        agent = MockAgent(errors=[_make_transient_error(), None])
+        agent._result = result
+        wrapped = wrap(
+            agent,
+            max_retries=3,
+            max_cost_cents=100.0,
+            output_dir="/tmp/observius_test_cost_reset",
+        )
+        # Manually record cost to prove budget gets reset on retry
+        wrapped._budget.record_cost_direct(50.0)
+        wrapped._accumulated_cost = 50.0
+        await wrapped.run()
+        # After a retry, both paths should have been reset
+        assert wrapped._budget.total_cost_cents == 0.0
+        assert wrapped._accumulated_cost == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Tests: Enrichment second pass (intent + selectors from model_output)
+# ---------------------------------------------------------------------------
+
+
+class TestEnrichmentSecondPass:
+    async def test_intent_from_next_goal(self) -> None:
+        """_enrich_steps should set intent from model_output.next_goal."""
+        steps = [
+            _make_history_step(
+                action_name="ClickElementAction",
+                next_goal="Click the login button",
+            ),
+        ]
+        result = _make_result(
+            steps=steps,
+            action_names=["ClickElementAction"],
+        )
+        agent = MockAgent(result=result)
+        wrapped = wrap(agent, output_dir="/tmp/observius_test_intent")
+        await wrapped.run()
+
+        assert wrapped.steps[0].intent == "Click the login button"
+
+    async def test_selectors_from_action_objects(self) -> None:
+        """_enrich_steps should extract selector from action objects."""
+        mo = SimpleNamespace(
+            action=[SimpleNamespace(selector="#login-btn")],
+            next_goal="Click login",
+            evaluation_previous_goal=None,
+        )
+        meta = SimpleNamespace(
+            input_tokens=100, output_tokens=50, step_duration=0.5,
+        )
+        step = SimpleNamespace(
+            result=[SimpleNamespace(error=None)],
+            model_output=mo,
+            metadata=meta,
+            state=SimpleNamespace(screenshot=None),
+        )
+        result = _make_result(
+            steps=[step],
+            action_names=["ClickElementAction"],
+        )
+        agent = MockAgent(result=result)
+        wrapped = wrap(agent, output_dir="/tmp/observius_test_selectors")
+        await wrapped.run()
+
+        assert wrapped.steps[0].selectors is not None
+        assert wrapped.steps[0].selectors[0]["value"] == "#login-btn"
+        assert wrapped.steps[0].selectors[0]["confidence"] == 0.8
+
+    async def test_enrichment_fields_in_metadata_json(
+        self, tmp_path: Path,
+    ) -> None:
+        """Enrichment fields should appear in saved run metadata JSON."""
+        mo = SimpleNamespace(
+            action=[SimpleNamespace(selector="#btn")],
+            next_goal="Click button",
+            evaluation_previous_goal=None,
+        )
+        meta = SimpleNamespace(
+            input_tokens=100, output_tokens=50, step_duration=0.5,
+        )
+        step = SimpleNamespace(
+            result=[SimpleNamespace(error=None)],
+            model_output=mo,
+            metadata=meta,
+            state=SimpleNamespace(screenshot=None),
+        )
+        result = _make_result(
+            steps=[step],
+            action_names=["ClickElementAction"],
+        )
+        agent = MockAgent(result=result)
+        wrapped = wrap(
+            agent,
+            task_id="test-enrichment-meta",
+            output_dir=str(tmp_path),
+        )
+        await wrapped.run()
+
+        meta_path = tmp_path / "runs" / "test-enrichment-meta.json"
+        data = json.loads(meta_path.read_text())
+        step_data = data["steps"][0]
+        assert step_data["intent"] == "Click button"
+        assert step_data["selectors"][0]["value"] == "#btn"
+
+
+# ---------------------------------------------------------------------------
+# Tests: BudgetMonitor integration
+# ---------------------------------------------------------------------------
+
+
+class TestBudgetMonitorIntegration:
+    def test_budget_monitor_created_with_limit(self) -> None:
+        agent = MockAgent()
+        wrapped = wrap(agent, max_cost_cents=50.0)
+        assert wrapped._budget.max_cost_cents == 50.0
+
+    def test_budget_monitor_created_without_limit(self) -> None:
+        agent = MockAgent()
+        wrapped = wrap(agent)
+        assert wrapped._budget.max_cost_cents is None

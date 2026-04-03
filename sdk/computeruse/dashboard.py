@@ -51,6 +51,7 @@ def create_app(data_dir: str = ".observius") -> FastAPI:
     runs_dir = base / "runs"
     screenshots_dir = base / "screenshots"
     replays_dir = base / "replays"
+    workflows_dir = base / "workflows"
 
     app = FastAPI(title="Observius Dashboard")
 
@@ -119,6 +120,38 @@ def create_app(data_dir: str = ".observius") -> FastAPI:
         if not replay_file.is_file():
             raise HTTPException(status_code=404, detail="Replay not found")
         return HTMLResponse(replay_file.read_text(encoding="utf-8"))
+
+    # -- Workflow routes ----------------------------------------------------
+
+    @app.get("/api/workflows")
+    def list_workflows() -> List[Dict[str, Any]]:
+        if not workflows_dir.is_dir():
+            return []
+        results: List[Dict[str, Any]] = []
+        for f in sorted(workflows_dir.glob("*.json")):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and "steps" in data:
+                    results.append(data)
+            except (OSError, json.JSONDecodeError):
+                continue
+        return results
+
+    @app.get("/api/workflows/{name}")
+    def get_workflow(name: str) -> Dict[str, Any]:
+        wf_file = (workflows_dir / f"{name}.json").resolve()
+        # Prevent path traversal
+        if not str(wf_file).startswith(str(workflows_dir.resolve())):
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if not wf_file.is_file():
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        try:
+            data = json.loads(wf_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HTTPException(
+                status_code=500, detail="Corrupt workflow file"
+            ) from exc
+        return data
 
     @app.get("/")
     def index() -> HTMLResponse:

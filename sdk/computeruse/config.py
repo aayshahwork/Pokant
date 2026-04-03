@@ -10,16 +10,31 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-# sdk/computeruse/ → sdk/ → repo root
-_SDK_DIR = Path(__file__).parent.parent
-_REPO_ROOT = _SDK_DIR.parent
+# Resolve .env search paths.
+#
+# When running from a repo checkout the layout is:
+#   sdk/computeruse/config.py  →  sdk/  →  repo root
+# When pip-installed, __file__ lives in site-packages and those traversals
+# are meaningless, so we also search CWD.
+
+_PACKAGE_DIR = Path(__file__).parent          # computeruse/
+_SDK_DIR = _PACKAGE_DIR.parent                # sdk/ (or site-packages/)
+_REPO_ROOT = _SDK_DIR.parent                  # repo root (or meaningless)
+_CWD = Path.cwd()
+
+# Candidate .env locations, checked in order (last loaded wins via override).
+_ENV_CANDIDATES = [
+    _REPO_ROOT / ".env",    # repo root  (dev checkout)
+    _SDK_DIR / ".env",      # sdk/.env   (dev checkout)
+    _CWD / ".env",          # current working directory (pip-installed / Docker)
+]
 
 # Force-load .env files before pydantic-settings reads env vars.
 # override=True ensures .env values win over any ambient ANTHROPIC_API_KEY
 # already set in the process (e.g. by Claude Code's subprocess runner).
 # These are no-ops if the files don't exist.
-_load_dotenv(_REPO_ROOT / ".env", override=True)
-_load_dotenv(_SDK_DIR / ".env", override=True)  # sdk/.env wins if both exist
+for _env_path in _ENV_CANDIDATES:
+    _load_dotenv(_env_path, override=True)
 
 
 class Settings(BaseSettings):
@@ -50,7 +65,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=(_SDK_DIR / ".env", _REPO_ROOT / ".env"),
+        env_file=(_REPO_ROOT / ".env", _SDK_DIR / ".env", _CWD / ".env"),
         env_file_encoding="utf-8",
         # Variable names are matched case-sensitively so ANTHROPIC_API_KEY and
         # anthropic_api_key are treated as different variables.

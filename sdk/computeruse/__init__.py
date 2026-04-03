@@ -41,12 +41,76 @@ from computeruse.stuck_detector import StuckDetector, StuckSignal
 from computeruse.track import TrackConfig, TrackedPage, track
 from computeruse.tracker import ObserviusTracker, TrackerConfig, create_tracker
 from computeruse.wrap import WrappedAgent, WrapConfig, wrap
-from computeruse.stagehand import StagehandConfig, TrackedStagehand, observe_stagehand
-from computeruse.alerts import AlertConfig, AlertEmitter
-from computeruse.analyzer import AnalysisConfig, AnalysisFinding, HistoryAnalyzer, LLMAnalyzer, RuleAnalyzer, RunAnalysis, RunAnalyzer
-from computeruse.desktop import mss_screenshot_fn, pillow_screenshot_fn, pyautogui_screenshot_fn
+from computeruse.models import CompiledStep, CompiledWorkflow
 
-__version__ = "0.1.0"
+# Optional dependencies — these require extras that may not be installed
+# (e.g. stagehand, pyautogui/mss/pillow, or modules not yet committed).
+try:
+    from computeruse.stagehand import StagehandConfig, TrackedStagehand, observe_stagehand
+except ImportError:
+    StagehandConfig = None  # type: ignore[assignment,misc]
+    TrackedStagehand = None  # type: ignore[assignment,misc]
+    observe_stagehand = None  # type: ignore[assignment]
+
+try:
+    from computeruse.alerts import AlertConfig, AlertEmitter
+except ImportError:
+    AlertConfig = None  # type: ignore[assignment,misc]
+    AlertEmitter = None  # type: ignore[assignment,misc]
+
+try:
+    from computeruse.analyzer import AnalysisConfig, AnalysisFinding, HistoryAnalyzer, LLMAnalyzer, RuleAnalyzer, RunAnalysis, RunAnalyzer
+except ImportError:
+    AnalysisConfig = None  # type: ignore[assignment,misc]
+    AnalysisFinding = None  # type: ignore[assignment,misc]
+    HistoryAnalyzer = None  # type: ignore[assignment,misc]
+    LLMAnalyzer = None  # type: ignore[assignment,misc]
+    RuleAnalyzer = None  # type: ignore[assignment,misc]
+    RunAnalysis = None  # type: ignore[assignment,misc]
+    RunAnalyzer = None  # type: ignore[assignment,misc]
+
+try:
+    from computeruse.desktop import mss_screenshot_fn, pillow_screenshot_fn, pyautogui_screenshot_fn
+except ImportError:
+    mss_screenshot_fn = None  # type: ignore[assignment]
+    pillow_screenshot_fn = None  # type: ignore[assignment]
+    pyautogui_screenshot_fn = None  # type: ignore[assignment]
+
+# Person B modules — lazy imports so the package works even if these
+# files haven't been committed yet (fresh clone without B's branch).
+try:
+    from computeruse.budget import BudgetExceededError, BudgetMonitor
+except ImportError:
+    BudgetMonitor = None  # type: ignore[assignment,misc]
+    BudgetExceededError = None  # type: ignore[assignment,misc]
+
+try:
+    from computeruse.action_verifier import ActionVerifier, VerificationResult
+except ImportError:
+    ActionVerifier = None  # type: ignore[assignment,misc]
+    VerificationResult = None  # type: ignore[assignment,misc]
+
+try:
+    from computeruse.step_enrichment import extract_selectors, infer_intent_from_step
+except ImportError:
+    extract_selectors = None  # type: ignore[assignment]
+    infer_intent_from_step = None  # type: ignore[assignment]
+
+try:
+    from computeruse.compiler import CompilationError, WorkflowCompiler
+except ImportError:
+    WorkflowCompiler = None  # type: ignore[assignment,misc]
+    CompilationError = None  # type: ignore[assignment,misc]
+
+try:
+    from computeruse.replay_executor import ReplayConfig, ReplayExecutor, ReplayResult, ReplayStepError
+except ImportError:
+    ReplayExecutor = None  # type: ignore[assignment,misc]
+    ReplayConfig = None  # type: ignore[assignment,misc]
+    ReplayResult = None  # type: ignore[assignment,misc]
+    ReplayStepError = None  # type: ignore[assignment,misc]
+
+__version__ = "0.2.0"
 
 __all__ = [
     # Client
@@ -119,6 +183,25 @@ __all__ = [
     "pyautogui_screenshot_fn",
     "pillow_screenshot_fn",
     "mss_screenshot_fn",
+    # Budget
+    "BudgetMonitor",
+    "BudgetExceededError",
+    # Action verification
+    "ActionVerifier",
+    "VerificationResult",
+    # Step enrichment
+    "extract_selectors",
+    "infer_intent_from_step",
+    # Compiled workflows
+    "CompiledStep",
+    "CompiledWorkflow",
+    "WorkflowCompiler",
+    "CompilationError",
+    # Replay executor
+    "ReplayExecutor",
+    "ReplayConfig",
+    "ReplayResult",
+    "ReplayStepError",
     # Metadata
     "__version__",
 ]

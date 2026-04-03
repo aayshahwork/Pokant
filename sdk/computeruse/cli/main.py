@@ -8,9 +8,11 @@ Entry point registered in pyproject.toml as:
 Usage:
     computeruse run --url https://example.com --task "Get the page title"
     computeruse run --url https://example.com --task "..." --no-headless
+    computeruse compile abc123
+    computeruse replay login-flow --params '{"email":"test@test.com"}'
+    computeruse open replays/abc123.html
     computeruse sessions
     computeruse sessions --delete example.com
-    computeruse replay replays/abc123.json
     computeruse version
 """
 
@@ -22,7 +24,7 @@ import sys
 import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import click
 from rich import box
@@ -31,9 +33,6 @@ from rich.panel import Panel
 from rich.table import Table
 
 import computeruse
-from computeruse import ComputerUse, ComputerUseError
-from computeruse.config import settings
-from computeruse.session_manager import SessionManager
 
 # stdout console for normal output; stderr console for errors.
 console = Console()
@@ -130,6 +129,8 @@ def run(
         # Visible browser (debugging)
         computeruse run --url https://example.com --task "..." --no-headless
     """
+    from computeruse import ComputerUse, ComputerUseError
+
     # ── Parse output schema ─────────────────────────────────────────────────
     output_schema: Optional[dict] = None
     if schema:
@@ -198,13 +199,13 @@ def run(
 
 
 # ---------------------------------------------------------------------------
-# replay
+# open (was "replay" — renamed so "replay" can be used for workflow execution)
 # ---------------------------------------------------------------------------
 
 
-@cli.command()
+@cli.command("open")
 @click.argument("replay_file", type=click.Path(exists=True, dir_okay=False))
-def replay(replay_file: str) -> None:
+def open_file(replay_file: str) -> None:
     """Open a replay file in the default browser.
 
     REPLAY_FILE is the path to a .json or .html replay artifact produced
@@ -212,7 +213,7 @@ def replay(replay_file: str) -> None:
 
     \b
     Example:
-        computeruse replay replays/abc123.json
+        computeruse open replays/abc123.html
     """
     path = Path(replay_file).resolve()
     suffix = path.suffix.lower()
@@ -242,7 +243,7 @@ def replay(replay_file: str) -> None:
 @click.option(
     "--dir",
     "session_dir",
-    default=settings.SESSION_DIR,
+    default="./sessions",
     show_default=True,
     help="Directory to scan for saved sessions.",
 )
@@ -258,6 +259,8 @@ def sessions(delete_domain: Optional[str], session_dir: str) -> None:
         computeruse sessions
         computeruse sessions --delete example.com
     """
+    from computeruse.session_manager import SessionManager
+
     manager = SessionManager(storage_dir=session_dir)
 
     # ── Delete mode ──────────────────────────────────────────────────────────
@@ -477,12 +480,11 @@ def dashboard(data_dir: str, port: int) -> None:
     """Launch local debugging dashboard."""
     try:
         from computeruse.dashboard import create_app  # noqa: F811
+        import uvicorn  # noqa: F811
     except ImportError:
         err_console.print("[bold red]Dashboard requires extra dependencies.[/bold red]")
         err_console.print("Install with:  [cyan]pip install observius\\[dashboard][/cyan]")
         raise SystemExit(1)
-
-    import uvicorn  # noqa: F811
 
     app = create_app(data_dir)
     console.print(f"[bold]Observius Dashboard[/bold]: [cyan]http://localhost:{port}[/cyan]")
@@ -601,6 +603,197 @@ def clean(data_dir: str, older_than: str, dry_run: bool) -> None:
 
     action = "Would delete" if dry_run else "Deleted"
     console.print(f"\n[bold]{action} {len(to_delete)} run(s).[/bold]")
+
+
+# ---------------------------------------------------------------------------
+# compile
+# ---------------------------------------------------------------------------
+
+
+@cli.command("compile")
+@click.argument("task_id")
+@click.option("--data-dir", default=".observius", show_default=True, help="Data directory.")
+@click.option("--name", default=None, help="Workflow name (defaults to task ID).")
+@click.option("--params", default=None, help="Comma-separated parameter names, e.g. 'email,password'.")
+@click.option("--script/--no-script", default=True, help="Generate a Playwright script alongside the workflow.")
+def compile_workflow(task_id: str, data_dir: str, name: Optional[str], params: Optional[str], script: bool) -> None:
+    """Compile a successful run into a replayable workflow.
+
+    TASK_ID is the ID of a completed run in the data directory.
+
+    \b
+    Examples:
+        computeruse compile abc123
+        computeruse compile abc123 --name "login-flow" --params "email,password"
+        computeruse compile abc123 --no-script
+    """
+    try:
+        from computeruse.compiler import CompilationError, WorkflowCompiler
+    except ImportError:
+        err_console.print(
+            "[bold red]Workflow compiler not available.[/bold red]\n"
+            "Install the full SDK or check that compiler.py is present."
+        )
+        sys.exit(1)
+
+    run_file = Path(data_dir) / "runs" / f"{task_id}.json"
+    if not run_file.is_file():
+        err_console.print(f"[bold red]Run not found:[/bold red] {run_file}")
+        sys.exit(1)
+
+    parameter_names = [p.strip() for p in params.split(",")] if params else None
+    compiler = WorkflowCompiler()
+
+    try:
+        workflow = compiler.compile_from_run(
+            str(run_file),
+            name=name,
+            parameter_names=parameter_names,
+        )
+    except CompilationError as exc:
+        err_console.print(f"[bold red]Compilation failed:[/bold red] {exc}")
+        sys.exit(1)
+
+    workflows_dir = str(Path(data_dir) / "workflows")
+    wf_path = compiler.save_workflow(workflow, output_dir=workflows_dir)
+
+    # Summary
+    grid = Table.grid(padding=(0, 2))
+    grid.add_row("[dim]Workflow[/dim]", f"[cyan]{workflow.name}[/cyan]")
+    grid.add_row("[dim]Steps[/dim]", str(len(workflow.steps)))
+    if workflow.parameters:
+        grid.add_row("[dim]Parameters[/dim]", ", ".join(workflow.parameters))
+    grid.add_row("[dim]Saved to[/dim]", f"[green]{wf_path}[/green]")
+
+    if script:
+        script_path = str(Path(workflows_dir) / f"{workflow.name}.py")
+        try:
+            compiler.generate_playwright_script(workflow, output_path=script_path)
+            grid.add_row("[dim]Script[/dim]", f"[green]{script_path}[/green]")
+        except CompilationError as exc:
+            grid.add_row("[dim]Script[/dim]", f"[yellow]Failed: {exc}[/yellow]")
+
+    console.print(Panel(grid, title="[bold]Compiled Workflow[/bold]", border_style="green"))
+
+
+# ---------------------------------------------------------------------------
+# replay (workflow execution)
+# ---------------------------------------------------------------------------
+
+
+@cli.command()
+@click.argument("workflow_id")
+@click.option("--data-dir", default=".observius", show_default=True, help="Data directory.")
+@click.option("--params", default=None, help='JSON parameters: \'{"email":"test@test.com"}\'')
+@click.option("--headless/--no-headless", default=True, help="Run browser headless (default) or visible.")
+@click.option("--budget", default=50.0, show_default=True, help="Max cost in cents for AI fallback.")
+@click.option("--no-verify", is_flag=True, default=False, help="Disable post-action verification.")
+def replay(
+    workflow_id: str,
+    data_dir: str,
+    params: Optional[str],
+    headless: bool,
+    budget: float,
+    no_verify: bool,
+) -> None:
+    """Replay a compiled workflow against a live browser.
+
+    WORKFLOW_ID is the name of a compiled workflow in the data directory.
+
+    \b
+    Examples:
+        computeruse replay login-flow
+        computeruse replay login-flow --params '{"email":"test@test.com"}'
+        computeruse replay login-flow --no-headless --budget 10
+    """
+    import asyncio
+
+    try:
+        from computeruse.replay_executor import ReplayConfig, ReplayExecutor, ReplayResult
+    except ImportError:
+        err_console.print(
+            "[bold red]Replay executor not available.[/bold red]\n"
+            "Install the full SDK or check that replay_executor.py is present."
+        )
+        sys.exit(1)
+
+    wf_path = Path(data_dir) / "workflows" / f"{workflow_id}.json"
+    if not wf_path.is_file():
+        err_console.print(f"[bold red]Workflow not found:[/bold red] {wf_path}")
+        sys.exit(1)
+
+    # Parse params JSON
+    param_dict: Dict[str, str] = {}
+    if params:
+        try:
+            param_dict = json.loads(params)
+            if not isinstance(param_dict, dict):
+                raise ValueError("Must be a JSON object")
+            if not all(isinstance(v, str) for v in param_dict.values()):
+                raise ValueError("All values must be strings")
+        except (json.JSONDecodeError, ValueError) as exc:
+            err_console.print(f"[bold red]Invalid --params:[/bold red] {exc}")
+            sys.exit(1)
+
+    config = ReplayConfig(
+        headless=headless,
+        max_cost_cents=budget,
+        verify_actions=not no_verify,
+        output_dir=data_dir,
+    )
+
+    async def _run() -> ReplayResult:
+        from playwright.async_api import async_playwright
+
+        executor = ReplayExecutor(config=config)
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=headless)
+            page = await browser.new_page()
+            try:
+                result = await executor.execute_from_file(
+                    str(wf_path), params=param_dict, page=page
+                )
+            finally:
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
+        return result
+
+    with console.status("[bold cyan]Replaying workflow...[/bold cyan]", spinner="dots"):
+        try:
+            result = asyncio.run(_run())
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Interrupted by user.[/yellow]")
+            sys.exit(130)
+        except Exception as exc:
+            err_console.print(f"\n[bold red]Replay error:[/bold red] {exc}")
+            sys.exit(1)
+
+    # Result summary
+    icon = "[bold green]PASSED[/bold green]" if result.success else "[bold red]FAILED[/bold red]"
+    grid = Table.grid(padding=(0, 2))
+    grid.add_row("[dim]Status[/dim]", icon)
+    grid.add_row("[dim]Steps[/dim]", f"{result.steps_executed}/{result.steps_total}")
+    grid.add_row("[dim]Duration[/dim]", f"{result.duration_ms / 1000:.2f}s")
+    grid.add_row("[dim]Cost[/dim]", f"${result.cost_cents / 100:.4f}")
+
+    tier_parts = []
+    if result.steps_deterministic:
+        tier_parts.append(f"{result.steps_deterministic} deterministic")
+    if result.steps_healed:
+        tier_parts.append(f"{result.steps_healed} healed")
+    if result.steps_ai_recovered:
+        tier_parts.append(f"{result.steps_ai_recovered} AI-recovered")
+    if tier_parts:
+        grid.add_row("[dim]Tiers[/dim]", ", ".join(tier_parts))
+
+    if result.error:
+        grid.add_row("[dim]Error[/dim]", f"[red]{result.error}[/red]")
+
+    border = "green" if result.success else "red"
+    console.print(Panel(grid, title="[bold]Replay Result[/bold]", border_style=border))
+    sys.exit(0 if result.success else 1)
 
 
 # ---------------------------------------------------------------------------
