@@ -48,6 +48,7 @@ class TaskIngestRequest(BaseModel):
     created_at: str | None = None
     completed_at: str | None = None
     analysis: dict[str, Any] | None = None
+    result: dict[str, Any] | None = None
 
     @field_validator("status")
     @classmethod

@@ -292,6 +292,8 @@ class ComputerUse:
                     duration_ms=result.duration_ms,
                     created_at=result.created_at,
                     analysis=result.analysis,
+                    url=str(config.url) if config.url else "",
+                    result=result.result if isinstance(result.result, dict) else ({"text": result.result} if result.result else None),
                 )
                 logger.info("Reported task %s to Observius API", result.task_id)
             except Exception:

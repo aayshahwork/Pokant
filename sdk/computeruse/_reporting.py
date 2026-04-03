@@ -26,6 +26,8 @@ def _report_to_api_sync(
     duration_ms: int,
     created_at: datetime | None,
     analysis: dict | None = None,
+    url: str = "",
+    result: dict | None = None,
 ) -> bool:
     """Synchronous POST of run results to the Observius API ingest endpoint.
 
@@ -35,8 +37,10 @@ def _report_to_api_sync(
     try:
         payload = {
             "task_id": task_id,
+            "url": url,
             "task_description": task_description,
             "status": status,
+            "result": result,
             "cost_cents": cost_cents,
             "total_tokens_in": sum(getattr(s, "tokens_in", 0) for s in steps),
             "total_tokens_out": sum(getattr(s, "tokens_out", 0) for s in steps),
@@ -101,6 +105,8 @@ async def report_to_api(
     duration_ms: int,
     created_at: datetime | None,
     analysis: dict | None = None,
+    url: str = "",
+    result: dict | None = None,
 ) -> bool:
     """Async wrapper around :func:`_report_to_api_sync`.
 
@@ -120,6 +126,8 @@ async def report_to_api(
         duration_ms=duration_ms,
         created_at=created_at,
         analysis=analysis,
+        url=url,
+        result=result,
     )
 
 

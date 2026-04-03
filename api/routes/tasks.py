@@ -248,7 +248,7 @@ def _save_screenshot_local(task_id: str, step_number: int, screenshot_bytes: byt
     with open(filepath, "wb") as f:
         f.write(screenshot_bytes)
 
-    return f"local://{task_dir}/{filename}"
+    return f"local://{task_id}/{filename}"
 
 
 @router.post(
@@ -315,6 +315,7 @@ async def ingest_task(
         created_at=created_at,
         completed_at=completed_at,
         analysis_json=body.analysis,
+        result=body.result,
     )
     db.add(task)
 

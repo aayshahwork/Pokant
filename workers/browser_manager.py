@@ -52,13 +52,19 @@ class BrowserManager:
         """Acquire a browser instance. 10s timeout.
 
         If use_cloud and a Browserbase API key is configured, connects
-        to a cloud browser via CDP. Otherwise launches local Chromium.
+        to a cloud browser via CDP. Falls back to local Chromium if
+        Browserbase is unavailable (missing credentials, 401, network error).
         """
         try:
             self._playwright = await async_playwright().start()
 
             if use_cloud and self.browserbase_api_key:
-                return await self._connect_cloud(self._playwright)
+                try:
+                    return await self._connect_cloud(self._playwright)
+                except Exception as exc:
+                    logger.warning(
+                        "Browserbase unavailable (%s) — falling back to local Chromium", exc
+                    )
 
             return await self._launch_local(self._playwright)
         except Exception as exc:

@@ -446,14 +446,17 @@ class TaskExecutor:
             if not history_items:
                 return []
 
-            # -- Extract screenshots from run_result (matches wrap.py) --------
-            screenshots: List[Any] = []
+            # -- Extract screenshot file paths from run_result -----------------
+            # screenshot_paths() returns the actual temp-file paths written by
+            # browser_use's ScreenshotService (one per history step, or None).
+            # Reading the files directly avoids a redundant base64 round-trip.
+            ss_paths: List[Optional[str]] = []
             if run_result is not None:
                 try:
-                    if hasattr(run_result, "screenshots"):
-                        screenshots = run_result.screenshots() or []
+                    if hasattr(run_result, "screenshot_paths"):
+                        ss_paths = run_result.screenshot_paths() or []
                 except Exception:
-                    logger.debug("Could not extract screenshots from run result", exc_info=True)
+                    logger.debug("Could not extract screenshot paths from run result", exc_info=True)
 
             # -- Extract action names from run_result -------------------------
             action_names: List[str] = []
@@ -522,33 +525,38 @@ class TaskExecutor:
                 # -- Screenshot extraction ------------------------------------
                 screenshot_bytes: Optional[bytes] = None
 
-                # Primary: from run_result.screenshots() (browser_use canonical API)
-                if i < len(screenshots) and screenshots[i]:
-                    ss = screenshots[i]
-                    if isinstance(ss, bytes):
-                        screenshot_bytes = ss
-                    elif isinstance(ss, str):
-                        try:
-                            screenshot_bytes = base64.b64decode(ss)
-                        except Exception:
-                            screenshot_bytes = ss.encode("utf-8")
+                # Primary: read PNG from browser_use's temp file directly
+                ss_path = ss_paths[i] if i < len(ss_paths) else None
+                if ss_path:
+                    try:
+                        p = Path(ss_path)
+                        if p.exists():
+                            screenshot_bytes = p.read_bytes()
+                    except Exception:
+                        pass
 
-                # Fallback: per-step result may carry a screenshot attribute
-                if screenshot_bytes is None and step_result is not None:
-                    sr_ss = getattr(step_result, "screenshot", None)
-                    if sr_ss is None and isinstance(step_result, list):
-                        for r in step_result:
-                            sr_ss = getattr(r, "screenshot", None)
-                            if sr_ss:
-                                break
-                    if sr_ss:
-                        if isinstance(sr_ss, bytes):
-                            screenshot_bytes = sr_ss
-                        elif isinstance(sr_ss, str):
-                            try:
-                                screenshot_bytes = base64.b64decode(sr_ss)
-                            except Exception:
-                                screenshot_bytes = sr_ss.encode("utf-8")
+                # Fallback: per-step state may have screenshot_path attribute
+                if screenshot_bytes is None:
+                    state = getattr(item, "state", None)
+                    sp = getattr(state, "screenshot_path", None) if state else None
+                    if sp:
+                        try:
+                            p = Path(sp)
+                            if p.exists():
+                                screenshot_bytes = p.read_bytes()
+                        except Exception:
+                            pass
+
+                screenshot_path = ""
+                if screenshot_bytes:
+                    screenshot_path = self._save_screenshot(screenshot_bytes, i + 1)
+
+                # If we have a path but no bytes (saved via alternate path), read it back
+                if screenshot_path and not screenshot_bytes:
+                    try:
+                        screenshot_bytes = Path(screenshot_path).read_bytes()
+                    except Exception:
+                        pass
 
                 steps.append(StepData(
                     step_number=i + 1,
@@ -560,6 +568,7 @@ class TaskExecutor:
                     tokens_in=tokens_in,
                     tokens_out=tokens_out,
                     screenshot_bytes=screenshot_bytes,
+                    screenshot_path=screenshot_path,
                 ))
 
             return steps
