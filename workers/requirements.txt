@@ -5,6 +5,7 @@ anthropic
 langchain-anthropic
 browser-use
 structlog
+pydantic-settings
 cryptography
 boto3
 requests

@@ -100,7 +100,7 @@ export default function LandingPage() {
               Get Started Free
             </Link>
             <a
-              href="https://github.com/AayushGithub/observius"
+              href="https://github.com/aayshahwork/observius"
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-medium hover:bg-muted transition-colors"
@@ -254,7 +254,7 @@ export default function LandingPage() {
           <p className="text-center text-sm text-muted-foreground">
             Built by Aayush &amp; Avi. Open source on{" "}
             <a
-              href="https://github.com/AayushGithub/observius"
+              href="https://github.com/aayshahwork/observius"
               target="_blank"
               rel="noopener noreferrer"
               className="underline underline-offset-4 hover:text-foreground"
