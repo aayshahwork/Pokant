@@ -51,7 +51,9 @@ Thumbs.db
 # SDK runtime output
 .pokant/
 /replays/
+sdk/replays/
 /sessions/
+.local_tasks.json
 *.egg-info/
 competitor_report.json
 intel_report.json
