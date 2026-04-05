@@ -22,17 +22,50 @@ class WorkerSettings(BaseSettings):
 worker_settings = WorkerSettings()
 
 
+_r2_checked: bool | None = None
+
+
 def is_r2_configured() -> bool:
-    """Return True if R2 credentials and endpoint are present and non-placeholder."""
+    """Return True if R2 credentials and endpoint are valid and boto3 accepts them.
+
+    Result is cached after the first call so we only log the warning once.
+    """
+    global _r2_checked
+    if _r2_checked is not None:
+        return _r2_checked
+
     key = worker_settings.R2_ACCESS_KEY
     secret = worker_settings.R2_SECRET_KEY
     endpoint = worker_settings.R2_ENDPOINT
+
+    # Quick checks for missing / placeholder values
     if not (key and secret and endpoint):
+        _r2_checked = False
         return False
-    placeholders = {"your_r2_access_key", "your_r2_secret_key", "your_r2_endpoint", "xxx"}
+    placeholders = {"your_r2_access_key", "your_r2_secret_key", "your_r2_endpoint", "xxx", "XXXXX"}
     if key in placeholders or secret in placeholders:
+        _r2_checked = False
         return False
-    # Cloudflare R2 endpoints must have a valid account ID (32-char hex)
     if "xxx" in endpoint or "your_" in endpoint or "ACCOUNT_ID" in endpoint:
+        _r2_checked = False
         return False
-    return True
+
+    # Definitive check: boto3 validates the endpoint URL at client creation
+    try:
+        import boto3
+        boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            aws_access_key_id=key,
+            aws_secret_access_key=secret,
+        )
+        _r2_checked = True
+    except Exception:
+        import logging
+        logging.getLogger("pokant.config").warning(
+            "R2 not configured: boto3 rejected endpoint_url=%s — skipping all R2 uploads",
+            endpoint,
+        )
+        _r2_checked = False
+
+    return _r2_checked

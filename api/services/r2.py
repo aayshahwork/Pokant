@@ -118,18 +118,42 @@ def _local_file_url(local_key: str) -> str:
     return f"/api/v1/local-files/{urllib.parse.quote(path, safe='/')}"
 
 
+_r2_checked: bool | None = None
+
+
 def is_r2_configured() -> bool:
-    """Return True if R2 credentials and endpoint are present and non-placeholder."""
+    """Return True if R2 credentials and endpoint are valid and boto3 accepts them."""
+    global _r2_checked
+    if _r2_checked is not None:
+        return _r2_checked
+
     from api.config import settings
 
     key = settings.R2_ACCESS_KEY
     secret = settings.R2_SECRET_KEY
     endpoint = settings.R2_ENDPOINT
     if not (key and secret and endpoint):
+        _r2_checked = False
         return False
-    placeholders = {"your_r2_access_key", "your_r2_secret_key", "your_r2_endpoint", "xxx"}
+    placeholders = {"your_r2_access_key", "your_r2_secret_key", "your_r2_endpoint", "xxx", "XXXXX"}
     if key in placeholders or secret in placeholders:
+        _r2_checked = False
         return False
     if "xxx" in endpoint or "your_" in endpoint or "ACCOUNT_ID" in endpoint:
+        _r2_checked = False
         return False
-    return True
+
+    try:
+        import boto3
+        boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            aws_access_key_id=key,
+            aws_secret_access_key=secret,
+        )
+        _r2_checked = True
+    except Exception:
+        logger.warning("R2 not configured: boto3 rejected endpoint_url=%s", endpoint)
+        _r2_checked = False
+
+    return _r2_checked

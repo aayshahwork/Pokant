@@ -473,18 +473,23 @@ def _upload_step_screenshots(task_id: str, step_data: list) -> Dict[int, str]:
         return {}
 
     if not is_r2_configured():
+        logger.info("R2 not configured, saving %d screenshots locally for task %s", len(steps_with_screenshots), task_id)
         return _save_step_screenshots_local(task_id, steps_with_screenshots)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     import boto3
 
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=worker_settings.R2_ENDPOINT or None,
-        aws_access_key_id=worker_settings.R2_ACCESS_KEY,
-        aws_secret_access_key=worker_settings.R2_SECRET_KEY,
-    )
+    try:
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=worker_settings.R2_ENDPOINT or None,
+            aws_access_key_id=worker_settings.R2_ACCESS_KEY,
+            aws_secret_access_key=worker_settings.R2_SECRET_KEY,
+        )
+    except Exception as exc:
+        logger.warning("R2 client creation failed for task %s: %s — saving locally", task_id, exc)
+        return _save_step_screenshots_local(task_id, steps_with_screenshots)
 
     def _upload_one(step: Any) -> tuple[int, str]:
         key = f"replays/{task_id}/step_{step.step_number}.png"
@@ -557,6 +562,7 @@ def _upload_replay(task_id: str, result: Any) -> str | None:
     )
 
     if not is_r2_configured():
+        logger.info("R2 not configured, saving replay locally for task %s", task_id)
         return _save_replay_local(task_id, replay_gen)
 
     import boto3
